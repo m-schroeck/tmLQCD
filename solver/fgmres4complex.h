@@ -1,5 +1,7 @@
 /***********************************************************************
+ *
  * Copyright (C) 2002,2003,2004,2005,2006,2007,2008 Carsten Urbach
+ *               2015 Mario Schroeck
  *
  * This file is part of tmLQCD.
  *
@@ -46,16 +48,17 @@
  * Autor: Carsten Urbach <urbach@ifh.de>
  ********************************************************************************/
 
-#ifndef _FGMRES_H
-#define _FGMRES_H
+#ifndef _FGMRES4COMPLEX_H
+#define _FGMRES4COMPLEX_H
 
-#include"solver/matrix_mult_typedef.h"
-#include"su3.h"
+//#include"solver/matrix_mult_typedef.h"
+//#include"su3.h"
 
-int fgmres(spinor * const P,spinor * const Q, 
+int fgmres4complex(_Complex double * const P, _Complex double * const Q,
 	   const int m, const int max_restarts,
-	   const double eps, const int rel_prec, 
-	   const int N, const int precon, matrix_mult f);
+		const double eps_sq, const int rel_prec,
+		const int N, const int parallel,
+		const int lda, c_matrix_mult f);
 
 
 #endif

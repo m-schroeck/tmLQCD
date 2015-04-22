@@ -1,6 +1,7 @@
 /***********************************************************************
  *
  * Copyright (C) 2002,2003,2004,2005,2006,2007,2008 Carsten Urbach
+ *               2015 Mario Schroeck
  *
  * This file is part of tmLQCD.
  *
@@ -22,9 +23,9 @@
  * with the ability for variable right preconditioning. 
  *
  * Inout:                                                                      
- *  spinor * P       : guess for the solving spinor                                             
+ *  _Complex double * P       : guess for the solving spinor
  * Input:                                                                      
- *  spinor * Q       : source spinor
+ *  _Complex double * Q       : source spinor
  *  int m            : Maximal dimension of Krylov subspace                                     
  *  int max_restarts : maximal number of restarts                                   
  *  double eps       : stopping criterium                                                     
@@ -40,111 +41,106 @@
 #include<stdlib.h>
 #include<stdio.h>
 #include<math.h>
+#include<string.h>
 #include"global.h"
 #include"su3.h"
 #include"linalg_eo.h"
-#include"gmres_precon.h"
-#include"operator/tm_operators.h"
-#include"sub_low_ev.h"
-#include"poly_precon.h"
-#include "Msap.h"
-#include"gamma.h"
-#include "start.h"
-#include "solver_field.h"
-#include "dfl_projector.h"
-#include"fgmres.h"
+#include"solver_field.h"
+#include"gcr4complex.h"
+#include"fgmres4complex.h"
 
-static void init_gmres(const int _M, const int _V);
+static void init_lgmres(const int _M, const int _V);
 
 static _Complex double ** H;
 static _Complex double * alpha;
 static _Complex double * c;
 static double * s;
-static spinor ** V;
-static spinor * _v;
-static spinor ** Z;
-static spinor * _z;
+static _Complex double ** V;
+static _Complex double * _v;
+static _Complex double ** Z;
+static _Complex double * _z;
 static _Complex double * _h;
 static _Complex double * alpha;
 static _Complex double * c;
 static double * s;
-extern int dfl_poly_iter;
+//extern int dfl_poly_iter;
 
-int fgmres(spinor * const P,spinor * const Q, 
+int fgmres4complex(_Complex double * const P, _Complex double * const Q,
 	   const int m, const int max_restarts,
-	   const double eps_sq, const int rel_prec,
-	   const int N, const int precon, matrix_mult f){
+		const double eps_sq, const int rel_prec,
+		const int N, const int parallel,
+		const int lda, c_matrix_mult f) {
 
   int restart, i, j, k;
   double beta, eps, norm;
   _Complex double tmp1, tmp2;
-  spinor * r0;
-  spinor ** solver_field = NULL;
+  _Complex double * r0;
+  _Complex double ** solver_field = NULL;
   const int nr_sf = 3;
 
-  if(N == VOLUME) {
-    init_solver_field(&solver_field, VOLUMEPLUSRAND, nr_sf);/* #ifdef HAVE_LAPACK */
-  }
-  else {
-    init_solver_field(&solver_field, VOLUMEPLUSRAND/2, nr_sf);
-  }
+//  if(N == VOLUME) {
+    init_lsolver_field(&solver_field, /*why not N?*/ lda, nr_sf);/* #ifdef HAVE_LAPACK */
+//  }
+//  else {
+//    init_lsolver_field(&solver_field, VOLUMEPLUSRAND/2, nr_sf);
+//  }
   eps=sqrt(eps_sq);
-  init_gmres(m, VOLUMEPLUSRAND);
+  init_lgmres(m, lda);
   r0 = solver_field[0];
   
-  norm = sqrt(square_norm(Q, N, 1));
+  norm = sqrt(lsquare_norm(Q, N, parallel));
 
-  assign(solver_field[2], P, N);
+  lassign(solver_field[2], P, N);
   for(restart = 0; restart < max_restarts; restart++){
     /* r_0=Q-AP  (b=Q, x+0=P) */
     f(r0, solver_field[2]);
-    diff(r0, Q, r0, N); 
+    ldiff(r0, Q, r0, N);
 
     /* v_0=r_0/||r_0|| */
-    alpha[0] = sqrt(square_norm(r0, N, 1));
+    alpha[0] = sqrt(lsquare_norm(r0, N, parallel));
 
     if(g_proc_id == g_stdio_proc && g_debug_level > 0){
-      printf("FGMRES %d\t%g true residue\n", restart*m, creal(alpha[0])*creal(alpha[0])); 
+      printf("lFGMRES %d\t%g true residue\n", restart*m, creal(alpha[0])*creal(alpha[0]));
       fflush(stdout);
     }
 
     if(creal(alpha[0])==0.){ 
-      assign(P, solver_field[2], N);
-      finalize_solver(solver_field, nr_sf);
+      lassign(P, solver_field[2], N);
+      finalize_lsolver(solver_field, nr_sf);
       return(restart*m);
     }
 
-    mul_r(V[0], 1./creal(alpha[0]), r0, N);
+    lmul_r(V[0], 1./creal(alpha[0]), r0, N);
 
     for(j = 0; j < m; j++){
       /* solver_field[0]=A*M^-1*v_j */
 
-      if(precon == 0) {
-	assign(Z[j], V[j], N);
-      }
-      else if(precon == 1) {
-	zero_spinor_field(Z[j], N);
-	Msap_eo(Z[j], V[j], 5, 3);
-      }
-      else if(precon == 2) {
-	mg_precon(Z[j], V[j]);
-      }
-      else if(precon == 4) {
-	mg_precon_cg(Z[j], V[j]);
-      }
-      else {
-	mg_Qsq_precon(Z[j], V[j]);
-      }
+//      if(precon == 0) {
+	lassign(Z[j], V[j], N);
+//      }
+//      else if(precon == 1) {
+//	zero_spinor_field(Z[j], N);
+//	Msap_eo(Z[j], V[j], 5, 3);
+//      }
+//      else if(precon == 2) {
+//	mg_precon(Z[j], V[j]);
+//      }
+//      else if(precon == 4) {
+//	mg_precon_cg(Z[j], V[j]);
+//      }
+//      else {
+//	mg_Qsq_precon(Z[j], V[j]);
+//      }
       f(r0, Z[j]); 
       /* Set h_ij and omega_j */
       /* solver_field[1] <- omega_j */
-      assign(solver_field[1], solver_field[0], N);
+      lassign(solver_field[1], solver_field[0], N);
       for(i = 0; i <= j; i++){
-	H[i][j] = scalar_prod(V[i], solver_field[1], N, 1);
-	assign_diff_mul(solver_field[1], V[i], H[i][j], N);
+	H[i][j] = lscalar_prod(V[i], solver_field[1], N, parallel);
+	lassign_diff_mul(solver_field[1], V[i], H[i][j], N);
       }
 
-      H[j+1][j] = sqrt(square_norm(solver_field[1], N, 1));
+      H[j+1][j] = sqrt(lsquare_norm(solver_field[1], N, parallel));
       for(i = 0; i < j; i++){
 	tmp1 = H[i][j];
 	tmp2 = H[i+1][j];
@@ -165,31 +161,31 @@ int fgmres(spinor * const P,spinor * const Q,
 
       /* precision reached? */
       if(g_proc_id == g_stdio_proc && g_debug_level > 0){
-	printf("FGMRES\t%d\t%g iterated residue\n", restart*m+j, creal(alpha[j+1])*creal(alpha[j+1])); 
+	printf("lFGMRES\t%d\t%g iterated residue\n", restart*m+j, creal(alpha[j+1])*creal(alpha[j+1]));
 	fflush(stdout);
       }
       if(((creal(alpha[j+1]) <= eps) && (rel_prec == 0)) || ((creal(alpha[j+1]) <= eps*norm) && (rel_prec == 1))){
 	(alpha[j]) = (alpha[j]) * (1./creal(H[j][j]));
-	assign_add_mul(solver_field[2], Z[j], alpha[j], N);
+	lassign_add_mul(solver_field[2], Z[j], alpha[j], N);
 	for(i = j-1; i >= 0; i--){
 	  for(k = i+1; k <= j; k++){
  	    (tmp1) = (H[i][k]) * (alpha[k]); 
 	    (alpha[i]) -= tmp1;
 	  }
 	  (alpha[i]) = (alpha[i]) * (1./creal(H[i][i]));
-	  assign_add_mul(solver_field[2], Z[i], alpha[i], N);
+	  lassign_add_mul(solver_field[2], Z[i], alpha[i], N);
 	}
 	for(i = 0; i < m; i++){
 	  alpha[i] = creal(alpha[i]);
 	}
-	assign(P, solver_field[2], N);
-	finalize_solver(solver_field, nr_sf);
+	lassign(P, solver_field[2], N);
+	finalize_lsolver(solver_field, nr_sf);
 	return(restart*m+j);
       }
       /* if not */
       else{
 	if(j != m-1){
-	  mul_r(V[(j+1)], 1./creal(H[j+1][j]), solver_field[1], N);
+	  lmul_r(V[(j+1)], 1./creal(H[j+1][j]), solver_field[1], N);
 	}
       }
 
@@ -197,14 +193,14 @@ int fgmres(spinor * const P,spinor * const Q,
     j=m-1;
     /* prepare for restart */
     (alpha[j]) = (alpha[j]) * (1./creal(H[j][j]));
-    assign_add_mul(solver_field[2], Z[j], alpha[j], N);
+    lassign_add_mul(solver_field[2], Z[j], alpha[j], N);
     for(i = j-1; i >= 0; i--){
       for(k = i+1; k <= j; k++){
 	(tmp1) = (H[i][k]) * (alpha[k]);
 	(alpha[i]) -= tmp1;
       }
       (alpha[i]) = (alpha[i]) * (1./creal(H[i][i]));
-      assign_add_mul(solver_field[2], Z[i], alpha[i], N);
+      lassign_add_mul(solver_field[2], Z[i], alpha[i], N);
     }
     for(i = 0; i < m; i++){
       alpha[i] = creal(alpha[i]);
@@ -212,12 +208,12 @@ int fgmres(spinor * const P,spinor * const Q,
   }
 
   /* If maximal number of restarts is reached */
-  assign(P, solver_field[2], N);
-  finalize_solver(solver_field, nr_sf);
+  lassign(P, solver_field[2], N);
+  finalize_lsolver(solver_field, nr_sf);
   return(-1);
 }
 
-static void init_gmres(const int _M, const int _V){
+static void init_lgmres(const int _M, const int _V){
   static int Vo = -1;
   static int M = -1;
   static int init = 0;
@@ -235,21 +231,21 @@ static void init_gmres(const int _M, const int _V){
     Vo = _V;
     M = _M;
     H = calloc(M+1, sizeof(_Complex double *));
-    V = calloc(M, sizeof(spinor *));
-    Z = calloc(M, sizeof(spinor *));
+    V = calloc(M, sizeof(_Complex double *));
+    Z = calloc(M, sizeof(_Complex double *));
 #if (defined SSE || defined SSE2)
     _h = calloc((M+2)*M, sizeof(_Complex double));
     H[0] = (_Complex double *)(((unsigned long int)(_h)+ALIGN_BASE)&~ALIGN_BASE); 
-    _v = calloc(M*Vo+1, sizeof(spinor));
-    V[0] = (spinor *)(((unsigned long int)(_v)+ALIGN_BASE)&~ALIGN_BASE);
-    _z = calloc(M*Vo+1, sizeof(spinor));
-    Z[0] = (spinor *)(((unsigned long int)(_z)+ALIGN_BASE)&~ALIGN_BASE);
+    _v = calloc(M*Vo+1, sizeof(_Complex double));
+    V[0] = (_Complex double *)(((unsigned long int)(_v)+ALIGN_BASE)&~ALIGN_BASE);
+    _z = calloc(M*Vo+1, sizeof(_Complex double));
+    Z[0] = (_Complex double *)(((unsigned long int)(_z)+ALIGN_BASE)&~ALIGN_BASE);
 #else
     _h = calloc((M+1)*M, sizeof(_Complex double));
     H[0] = _h;
-    _v = calloc(M*Vo, sizeof(spinor));
+    _v = calloc(M*Vo, sizeof(_Complex double));
     V[0] = _v;
-    _z = calloc(M*Vo, sizeof(spinor));
+    _z = calloc(M*Vo, sizeof(_Complex double));
     Z[0] = _z;
 #endif
     s = calloc(M, sizeof(double));
