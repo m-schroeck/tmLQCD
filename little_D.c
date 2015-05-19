@@ -817,9 +817,37 @@ void little_field_gather_eo(int eo, _Complex double * w) {
   return;
 }
 
-
-
 void little_D(_Complex double * v, _Complex double *w) {
+  int sq = g_N_s*g_N_s;
+  CONE = 1.0;
+  CMONE = -1.0;
+  CZERO = 0.0;
+
+  if(dfl_subspace_updated) {
+    compute_little_D(0);
+    dfl_subspace_updated = 0;
+  }
+
+  little_field_gather(w);
+
+  /* all the mpilocal stuff first */
+  for(int i = 0; i < nb_blocks; i++) {
+    /* diagonal term */
+    _FT(zgemv)("N", &g_N_s, &g_N_s, &CONE, block_list[i].little_dirac_operator,
+               &g_N_s, w + i * g_N_s, &ONE, &CZERO, v + i * g_N_s, &ONE, 1);
+  }
+    /* offdiagonal terms */
+  for(int j = 1; j < 9; j++) {
+    for(int i = 0; i < nb_blocks; i++) {
+      _FT(zgemv)("N", &g_N_s, &g_N_s, &CONE, block_list[i].little_dirac_operator + j * sq,
+		 &g_N_s, w + (nb_blocks * j + i) * g_N_s, &ONE, &CONE, v + i * g_N_s, &ONE, 1);
+    }
+  }
+  return;
+}
+
+
+void little_Q(_Complex double * v, _Complex double *w) {
   int sq = g_N_s*g_N_s;
   CONE = 1.0;
   CMONE = -1.0;
@@ -863,6 +891,17 @@ void little_Q_pm(_Complex double * v, _Complex double *w) {
   free(tmp);
   lassign_add_mul(v, w, g_mu*g_mu + g_mu2*g_mu2, nb_blocks*g_N_s);
   //memcpy(v, w, nb_blocks * g_N_s*sizeof(_Complex double));
+}
+
+void little_Q_minus(_Complex double * v, _Complex double *w) {
+//  if(dfl_subspace_updated) {
+    g_mu = -g_mu;
+    compute_little_D(1);
+    little_D(v, w);
+    g_mu = -g_mu;
+    compute_little_D(1);
+    dfl_subspace_updated = 0;
+//  }
 }
 
 

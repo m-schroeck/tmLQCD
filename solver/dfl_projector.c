@@ -50,6 +50,7 @@
 #include "mr.h"
 #include "solver_field.h"
 #include "solver.h"
+#include "gamma.h"
 #include "dfl_projector.h"
 
 int dfl_sloppy_prec = 1;
@@ -67,6 +68,12 @@ const int dfl_work_size = 16;
 _Complex double *work[16];
 
 static void alloc_dfl_projector();
+
+void little_D_sq(_Complex double * v, _Complex double *w) {
+	little_D(ctmp,w);
+	little_D(v,ctmp);
+	return;
+}
 
 /* Break up full volume spinor to blocks
  * loop over block.basis
@@ -109,7 +116,10 @@ void project(spinor * const out, spinor * const in) {
     i_o=0;
     i_e=0;
     for(i = 0; i < nb_blocks; i++) {
+    	/* source times gamma_5 */
+      gamma5(block_list[i].basis[j], block_list[i].basis[j], vol);
       inprod[j + i*g_N_s]  = scalar_prod(block_list[i].basis[j], psi[i], vol, 0);
+//      gamma5(block_list[i].basis[j], block_list[i].basis[j], vol);
       if(evenodd) {
 	if (block_list[i].evenodd==0) {
 	  inprod_eo[j + i_e*g_N_s] = inprod[j + i*g_N_s];
@@ -171,7 +181,10 @@ void project(spinor * const out, spinor * const in) {
     }
     else {
       if (little_solver == 0) {
-	iter = gcr4complex(invvec, inprod, little_m, 1000, prec, 1, nb_blocks * g_N_s, 1, nb_blocks * 9 * g_N_s, &little_D);
+//	iter = cgne4complex(invvec, inprod, 1000, prec, 1, nb_blocks * g_N_s, nb_blocks * 9 * g_N_s, &little_Q_pm);
+	iter = gcr4complex(invvec, inprod, little_m, 1000, prec, 1, nb_blocks*g_N_s, 1, nb_blocks*9*g_N_s, &little_Q);
+//	lassign(ctmp,invvec,nb_blocks * g_N_s);
+//	little_Q_minus(invvec,ctmp);
 	if(g_proc_id == 0 && g_debug_level > 2) {
 	  printf("lgcr number of iterations %d (no P_L)\n", iter);
 	}	
@@ -189,7 +202,9 @@ void project(spinor * const out, spinor * const in) {
 	}	
       }
       else {
-	iter = fgmres4complex(invvec, inprod, little_m, 1000, prec, 1, nb_blocks * g_N_s, 1, nb_blocks * 9 * g_N_s, &little_D);
+
+
+	iter = fgmres4complex(invvec, inprod, little_m, 1000, prec, 1, nb_blocks * g_N_s, 1, nb_blocks * 9 * g_N_s, &little_D_sq);
 	if(g_proc_id == 0 && g_debug_level > 2) {
 	  printf("lfgmres number of iterations %d (no P_L)\n", iter);
 	}
@@ -259,6 +274,14 @@ void project(spinor * const out, spinor * const in) {
 
   /* reconstruct global field */
   reconstruct_global_field_GEN(out, psi, nb_blocks);
+
+   for (j = 0; j < g_N_s; j++) {/*loop over block.basis */
+    for(i = 0; i < nb_blocks; i++) {
+    	/* source times gamma_5 */
+      gamma5(block_list[i].basis[j], block_list[i].basis[j], vol);
+    }
+   }
+
   free_dfl_projector();
   return;
 }

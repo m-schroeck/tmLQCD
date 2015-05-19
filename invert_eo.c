@@ -402,6 +402,12 @@ int invert_eo(spinor * const Even_new, spinor * const Odd_new,
       add(g_spinor_field[DUM_DERI+1], g_spinor_field[DUM_DERI+1], g_spinor_field[DUM_DERI+2], VOLUME);
     }
     else if (solver_flag == DFLFGMRES) {
+      /* Use Q=gamma5 D for DFL */
+      if (use_iQ_dfl) {
+        gamma5(g_spinor_field[DUM_DERI], g_spinor_field[DUM_DERI], VOLUME);
+        if (g_proc_id == 0)
+        printf("# Using Q=gamma5 D for deflation.\n"); fflush(stdout);
+      }
       if(g_proc_id == 0) {printf("# Using deflated FGMRES solver! m = %d\n", gmres_m_parameter); fflush(stdout);}
       iter = fgmres(g_spinor_field[DUM_DERI+1], g_spinor_field[DUM_DERI], gmres_m_parameter, 
 		    max_iter/gmres_m_parameter, precision, rel_prec, VOLUME, 2, &D_psi);
@@ -455,7 +461,7 @@ int invert_eo(spinor * const Even_new, spinor * const Odd_new,
 		     rel_prec, VOLUME, &Q_pm_psi);
       Q_minus_psi(g_spinor_field[DUM_DERI+1], g_spinor_field[DUM_DERI]);
     }
-    else {
+    else { //CG
       if(g_proc_id == 0) {printf("# Using CG!\n"); fflush(stdout);}
 #ifdef HAVE_GPU 
       if(usegpu_flag){
@@ -507,7 +513,7 @@ int invert_eo(spinor * const Even_new, spinor * const Odd_new,
 	}
       }
 #endif
-    }
+    } // end CG
     convert_lexic_to_eo(Even_new, Odd_new, g_spinor_field[DUM_DERI+1]);
   }
   return(iter);
