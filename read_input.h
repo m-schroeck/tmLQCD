@@ -112,6 +112,7 @@ extern "C"
   extern int use_qudainverter;
 
   extern int nblocks_t, nblocks_x, nblocks_y, nblocks_z;
+  extern int dilutionblksz_t;
 
   int read_input(char *);
   int reread_input(char *);

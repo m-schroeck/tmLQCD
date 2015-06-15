@@ -171,6 +171,8 @@ static inline void rmQuotes(char *str){
   int nblocks_x;
   int nblocks_y;
   int nblocks_z;
+  
+  int dilutionblksz_t;
 
   int dfl_field_iter;
   int dfl_poly_iter;
@@ -319,6 +321,8 @@ static inline void rmQuotes(char *str){
 
 %x QUDAINVERTER
 
+%x DILUTIONBST
+
 
 
 %%
@@ -414,6 +418,8 @@ static inline void rmQuotes(char *str){
 ^DflPolyIter{EQL}                  BEGIN(DFLPOLYITER);
 
 ^BeginGPU                          BEGIN(INITGPU);
+
+^DilutionBlocksizeT{EQL}           BEGIN(DILUTIONBST);
 
 
 
@@ -2035,6 +2041,10 @@ static inline void rmQuotes(char *str){
   reweighting_samples = atoi(yytext);
   if(myverbose!=0) fprintf(stderr, "Number of reweighting samples set to %d\n", reweighting_samples);
 }
+<DILUTIONBST>{DIGIT}+               {
+  dilutionblksz_t=atoi(yytext);
+  if(myverbose!=0) printf("dilutionblksz_t = %s \n", yytext);
+}
 
 <*>^#   {
    comment_caller = YY_START;
@@ -2115,6 +2125,8 @@ int read_input(char * conf_file){
   nblocks_x = 1;
   nblocks_y = 1;
   nblocks_z = 1;
+  
+  dilutionblksz_t = 1;
 
   dfl_field_iter = 80;
   dfl_poly_iter = 20;

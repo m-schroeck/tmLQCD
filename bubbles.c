@@ -107,6 +107,7 @@ int main(int argc, char *argv[])
   char parameterfilename[206];
   char conf_filename[50];
   char basefilename[100];
+  char plainbasefilename[100];
   char * input_filename = NULL;
   char * filename = NULL;
   double plaquette_energy;
@@ -244,6 +245,11 @@ int main(int argc, char *argv[])
     }
   }
 
+  if( (g_nproc_t*T)%dilutionblksz_t != 0) {
+	  fprintf(stderr, "T needs to be a multiple of DilutionBlocksizeT...\n");
+      exit(-1);
+  }
+
   g_mu = g_mu1;
 
   if (g_cart_id == 0) {
@@ -378,10 +384,10 @@ int main(int argc, char *argv[])
       s_ = calloc(no_sources_z2*VOLUMEPLUSRAND+1, sizeof(spinor));
       s  = calloc(no_sources_z2, sizeof(spinor*));
       if(s_ == NULL) { 
-	printf("Not enough memory in %s: %d",__FILE__,__LINE__); exit(42); 
+	printf("Not enough memory in %s: %d",__FILE__,__LINE__); exit(42);
       }
       if(s == NULL) { 
-	printf("Not enough memory in %s: %d",__FILE__,__LINE__); exit(42); 
+	printf("Not enough memory in %s: %d",__FILE__,__LINE__); exit(42);
       }
       
       
@@ -391,9 +397,9 @@ int main(int argc, char *argv[])
 #else
         s[i] = s_+i*VOLUMEPLUSRAND;
 #endif
-	
+
         random_spinor_field_lexic(s[i], reproduce_randomnumber_flag,RN_Z2);
-	
+
 /* 	what is this here needed for?? */
 /*         spinor *aux_,*aux; */
 /* #if ( defined SSE || defined SSE2 || defined SSE3 ) */
@@ -403,15 +409,15 @@ int main(int argc, char *argv[])
 /*         aux_=calloc(VOLUMEPLUSRAND, sizeof(spinor)); */
 /*         aux = aux_; */
 /* #endif */
-	
+
         if(g_proc_id == 0) {
           printf("source %d \n", i);
         }
-	
+
         if(compute_modenumber != 0){
           mode_number(s[i], mstarsq);
         }
-	
+
         if(compute_topsus !=0) {
           top_sus(s[i], mstarsq);
         }
@@ -493,6 +499,9 @@ int main(int argc, char *argv[])
       bubbles[0] = g_spinor_field[6];
       bubbles[1] = g_spinor_field[7];
 
+      /* need to modify the basename later */
+      strcpy(plainbasefilename,SourceInfo.basename);
+
       for(isample = 0; isample < no_samples; isample++) {
 
         /* get Z2 noise (store it in g_spinor_field[4-5]) */
@@ -514,7 +523,7 @@ int main(int argc, char *argv[])
 			operator_list[op_id].prop0 = g_spinor_field[2];
 			operator_list[op_id].prop1 = g_spinor_field[3];
 
-            for (int bt=0; bt<T*g_nproc_t; bt++) {
+            for (int bt=0; bt<T*g_nproc_t; bt+=dilutionblksz_t) {
 				if (g_cart_id == 0) {
 					fprintf(stdout, "#\n"); /*Indicate starting of new index*/
 				}
@@ -537,42 +546,44 @@ int main(int argc, char *argv[])
 							psrc = operator_list[op_id].sr1 + i;
 							pzn = g_spinor_field[5] + i;
 						  }
-						  if( t+g_proc_coords[0]*T==bt ) {
+						  /* loop over dilution blocksize T */
+						  for( int jt=bt; jt<bt+dilutionblksz_t; jt++ )
+							  if( t+g_proc_coords[0]*T==jt ) {
 
-							  if( bs==0 ) {
-								  if( bc==0 )
-									  psrc->s0.c0 = pzn->s0.c0;
-								  else if( bc==1 )
-									  psrc->s0.c1 = pzn->s0.c1;
-								  else if( bc==2 )
-									  psrc->s0.c2 = pzn->s0.c2;
+								  if( bs==0 ) {
+									  if( bc==0 )
+										  psrc->s0.c0 = pzn->s0.c0;
+									  else if( bc==1 )
+										  psrc->s0.c1 = pzn->s0.c1;
+									  else if( bc==2 )
+										  psrc->s0.c2 = pzn->s0.c2;
+								  }
+								  else if( bs==1 ) {
+									  if( bc==0 )
+										  psrc->s1.c0 = pzn->s1.c0;
+									  else if( bc==1 )
+										  psrc->s1.c1 = pzn->s1.c1;
+									  else if( bc==2 )
+										  psrc->s1.c2 = pzn->s1.c2;
+								  }
+								  else if( bs==2 ) {
+									  if( bc==0 )
+										  psrc->s2.c0 = pzn->s2.c0;
+									  else if( bc==1 )
+										  psrc->s2.c1 = pzn->s2.c1;
+									  else if( bc==2 )
+										  psrc->s2.c2 = pzn->s2.c2;
+								  }
+								  else if( bs==3 ) {
+									  if( bc==0 )
+										  psrc->s3.c0 = pzn->s3.c0;
+									  else if( bc==1 )
+										  psrc->s3.c1 = pzn->s3.c1;
+									  else if( bc==2 )
+										  psrc->s3.c2 = pzn->s3.c2;
+								  }
 							  }
-							  else if( bs==1 ) {
-								  if( bc==0 )
-									  psrc->s1.c0 = pzn->s1.c0;
-								  else if( bc==1 )
-									  psrc->s1.c1 = pzn->s1.c1;
-								  else if( bc==2 )
-									  psrc->s1.c2 = pzn->s1.c2;
-							  }
-							  else if( bs==2 ) {
-								  if( bc==0 )
-									  psrc->s2.c0 = pzn->s2.c0;
-								  else if( bc==1 )
-									  psrc->s2.c1 = pzn->s2.c1;
-								  else if( bc==2 )
-									  psrc->s2.c2 = pzn->s2.c2;
-							  }
-							  else if( bs==3 ) {
-								  if( bc==0 )
-									  psrc->s3.c0 = pzn->s3.c0;
-								  else if( bc==1 )
-									  psrc->s3.c1 = pzn->s3.c1;
-								  else if( bc==2 )
-									  psrc->s3.c2 = pzn->s3.c2;
-							  }
-						  }
-						}
+						} /* end dilution */
 #ifdef MPI
 						MPI_Barrier(MPI_COMM_WORLD);
 #endif
@@ -585,12 +596,12 @@ int main(int argc, char *argv[])
 
 				/* gather bubbles */
 				for( int iv=0; iv<VOLUME/2; iv++ ) {
-					p_cplx_bbl[0] = bubbles[0]+iv;
-					p_cplx_bbl[1] = bubbles[1]+iv;
-					p_cplx_src[0] = operator_list[op_id].sr0+iv;
-					p_cplx_src[1] = operator_list[op_id].sr1+iv;
-					p_cplx_prp[0] = operator_list[op_id].prop0+iv;
-					p_cplx_prp[1] = operator_list[op_id].prop1+iv;
+					p_cplx_bbl[0] = (_Complex double*) bubbles[0]+iv;
+					p_cplx_bbl[1] = (_Complex double*) bubbles[1]+iv;
+					p_cplx_src[0] = (_Complex double*) operator_list[op_id].sr0+iv;
+					p_cplx_src[1] = (_Complex double*) operator_list[op_id].sr1+iv;
+					p_cplx_prp[0] = (_Complex double*) operator_list[op_id].prop0+iv;
+					p_cplx_prp[1] = (_Complex double*) operator_list[op_id].prop1+iv;
 
 					for( int is=0; is<4; is++ )
 						for( int ic=0; ic<3; ic++ ) {
@@ -604,13 +615,14 @@ int main(int argc, char *argv[])
               operator_list[op_id].prop0 = bubbles[0];
               operator_list[op_id].prop1 = bubbles[1];
 
-              sprintf(basefilename, "bubbles.s%dc%d", bs, bc);
+              sprintf(basefilename, "%s.s%dc%d", plainbasefilename, bs, bc);
               SourceInfo.basename = basefilename;
               operator_list[op_id].write_prop( op_id, 0, 0 );
           }
       }
 
       /* ***************  END CALCULATING BUBBLES HERE  *************** */
+
 
       if(use_preconditioning==1 && operator_list[op_id].precWS!=NULL ){
         /* free preconditioning workspace */

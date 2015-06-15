@@ -139,7 +139,7 @@ void z2_volume_source(spinor * const P, spinor * const Q,
 
   /* Compute the seed */
   seed =(int) abs(1 + sample + f*10*97 + nstore*100*53 + g_cart_id*13);
-  printf("\n\n\nseed = %d\n\n\n",seed);
+  printf("# seed = %d\n",seed);
 
   rlxd_init(2, seed);
 
@@ -209,7 +209,7 @@ void z4_volume_source(spinor * const P, spinor * const Q,
 
   /* Compute the seed */
   seed =(int) abs(1 + sample + f*10*97 + nstore*100*53 + g_cart_id*13);
-  printf("\n\n\nseed = %d\n\n\n",seed);
+  printf("# seed = %d\n",seed);
 
   rlxd_init(2, seed);
 
