@@ -91,6 +91,7 @@
 #include "solver/spectral_proj.h"
 #include "meas/measurements.h"
 #include "source_generation.h"
+#include "gettime.h"
 #ifdef QUDA
 #  include "quda_interface.h"
 #endif
@@ -122,6 +123,8 @@ int main(int argc, char *argv[])
   _Complex double * p_cplx_bbl[2];
   _Complex double * p_cplx_src[2];
   _Complex double * p_cplx_prp[2];
+
+  double startTime = gettime();
 
 #ifdef _KOJAK_INST
 #pragma pomp inst init
@@ -505,7 +508,9 @@ int main(int argc, char *argv[])
       /* need to modify the basename later */
       strcpy(plainbasefilename,SourceInfo.basename);
 
-      for(isample = 0; isample < no_samples; isample++) {
+      int invcounter=1;
+
+      for(isample = 0; isample < 1 /*no_samples*/; isample++) {
 
         /* get Z2 noise (store it in g_spinor_field[4-5]) */
         z4_volume_source(g_spinor_field[4], g_spinor_field[5], isample, nstore, (int)(100.0*operator_list[op_id].mu) );
@@ -595,6 +600,9 @@ int main(int argc, char *argv[])
 				if( (operator_list[op_id].solver == INCREIGCG) && (operator_list[op_id].solver_params.eigcg_rand_guess_opt) ){ //randomize the initial guess
 				  gaussian_volume_source( operator_list[op_id].prop0, operator_list[op_id].prop1,isample,ix,0); //need to check this
 				}
+				/* invert */
+				if(g_proc_id == 0)
+					printf("\n# Starting inversion %d/%d\n", invcounter++, 12*((g_nproc_t*T)/dilutionblksz_t));
 				operator_list[op_id].inverter(op_id, index_start, 0);
 
 				/* gather bubbles */
@@ -620,6 +628,7 @@ int main(int argc, char *argv[])
 
               sprintf(basefilename, "%s.s%dc%d", plainbasefilename, bs, bc);
               SourceInfo.basename = basefilename;
+              SourceInfo.nstore = nstore;
               operator_list[op_id].write_prop( op_id, 0, 0 );
           }
       }
@@ -641,6 +650,7 @@ int main(int argc, char *argv[])
     nstore += Nsave;
   }
 
+
 #ifdef OMP
   free_omp_accumulators();
 #endif
@@ -656,6 +666,10 @@ int main(int argc, char *argv[])
 #ifdef QUDA
   _endQuda();
 #endif
+  double endTime = gettime();
+  double diffTime = endTime - startTime;
+  if(g_proc_id == 0)
+    printf("# Total time elapsed: %f secs\n", diffTime);
 #ifdef MPI
   MPI_Barrier(MPI_COMM_WORLD);
   MPI_Finalize();
