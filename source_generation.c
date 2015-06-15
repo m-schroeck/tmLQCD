@@ -80,9 +80,9 @@ void rnormal(double * r, const int n)
 /* this is corrected for in the contraction      */
 /* codes                                         */
 void gaussian_volume_source(spinor * const P, spinor * const Q,
-			    const int sample, const int nstore, const int f) 
+          const int sample, const int nstore, const int f)
 {
-  int x, y, z, t, i, reset = 0, seed; 
+  int x, y, z, t, i, reset = 0, seed;
   int rlxd_state[105];
   spinor * p;
 
@@ -100,17 +100,157 @@ void gaussian_volume_source(spinor * const P, spinor * const Q,
   for(t = 0; t < T; t++) {
     for(x = 0; x < LX; x++) {
       for(y =0; y < LY; y++) {
-	for(z = 0; z < LZ; z++) {
-	  i = g_lexic2eosub[ g_ipt[t][x][y][z] ];
-	  if((t+x+y+z+g_proc_coords[3]*LZ+g_proc_coords[2]*LY 
-	      + g_proc_coords[0]*T+g_proc_coords[1]*LX)%2 == 0) {
-	    p = P + i;
-	  }
-	  else {
-	    p = Q + i;
-	  }
-	  rnormal((double*)p, 24);
-	}
+  for(z = 0; z < LZ; z++) {
+    i = g_lexic2eosub[ g_ipt[t][x][y][z] ];
+    if((t+x+y+z+g_proc_coords[3]*LZ+g_proc_coords[2]*LY
+        + g_proc_coords[0]*T+g_proc_coords[1]*LX)%2 == 0) {
+      p = P + i;
+    }
+    else {
+      p = Q + i;
+    }
+    rnormal((double*)p, 24);
+  }
+      }
+    }
+  }
+
+  /* reset the ranlxd if neccessary */
+  if(reset) {
+    rlxd_reset(rlxd_state);
+  }
+  return;
+}
+
+/* Generates a volume source with Z2 noise */
+void z2_volume_source(spinor * const P, spinor * const Q,
+          const int sample, const int nstore, const int f)
+{
+  int x, y, z, t, i, reset = 0, seed; 
+  int rlxd_state[105];
+  spinor * p;
+  double v[12];
+
+  /* save the ranlxd_state if neccessary */
+  if(ranlxd_init == 1) {
+    rlxd_get(rlxd_state);
+    reset = 1;
+  }
+
+  /* Compute the seed */
+  seed =(int) abs(1 + sample + f*10*97 + nstore*100*53 + g_cart_id*13);
+  printf("\n\n\nseed = %d\n\n\n",seed);
+
+  rlxd_init(2, seed);
+
+  for(t = 0; t < T; t++) {
+    for(x = 0; x < LX; x++) {
+      for(y =0; y < LY; y++) {
+        for(z = 0; z < LZ; z++) {
+          i = g_lexic2eosub[ g_ipt[t][x][y][z] ];
+          if((t+x+y+z+g_proc_coords[3]*LZ+g_proc_coords[2]*LY
+            + g_proc_coords[0]*T+g_proc_coords[1]*LX)%2 == 0) {
+            p = P + i;
+          }
+          else {
+            p = Q + i;
+          }
+          ranlxd(v,12);
+          p->s0.c0 = ( v[0]  < 0.5 ? 1.0 : -1.0 );
+          p->s0.c1 = ( v[1]  < 0.5 ? 1.0 : -1.0 );
+          p->s0.c2 = ( v[2]  < 0.5 ? 1.0 : -1.0 );
+          p->s1.c0 = ( v[3]  < 0.5 ? 1.0 : -1.0 );
+          p->s1.c1 = ( v[4]  < 0.5 ? 1.0 : -1.0 );
+          p->s1.c2 = ( v[5]  < 0.5 ? 1.0 : -1.0 );
+          p->s2.c0 = ( v[5]  < 0.5 ? 1.0 : -1.0 );
+          p->s2.c1 = ( v[7]  < 0.5 ? 1.0 : -1.0 );
+          p->s2.c2 = ( v[8]  < 0.5 ? 1.0 : -1.0 );
+          p->s3.c0 = ( v[9]  < 0.5 ? 1.0 : -1.0 );
+          p->s3.c1 = ( v[10] < 0.5 ? 1.0 : -1.0 );
+          p->s3.c2 = ( v[11] < 0.5 ? 1.0 : -1.0 );
+//          printf("i=%d: p->s0.c0 = %f + I*%f\n", i, creal(p->s0.c0), cimag(p->s0.c0));
+//          printf("i=%d: p->s0.c1 = %f + I*%f\n", i, creal(p->s0.c1), cimag(p->s0.c1));
+//          printf("i=%d: p->s0.c2 = %f + I*%f\n", i, creal(p->s0.c2), cimag(p->s0.c2));
+//          printf("i=%d: p->s1.c0 = %f + I*%f\n", i, creal(p->s1.c0), cimag(p->s1.c0));
+//          printf("i=%d: p->s1.c1 = %f + I*%f\n", i, creal(p->s1.c1), cimag(p->s1.c1));
+//          printf("i=%d: p->s1.c2 = %f + I*%f\n", i, creal(p->s1.c2), cimag(p->s1.c2));
+//          printf("i=%d: p->s2.c0 = %f + I*%f\n", i, creal(p->s2.c0), cimag(p->s2.c0));
+//          printf("i=%d: p->s2.c1 = %f + I*%f\n", i, creal(p->s2.c1), cimag(p->s2.c1));
+//          printf("i=%d: p->s2.c2 = %f + I*%f\n", i, creal(p->s2.c2), cimag(p->s2.c2));
+//          printf("i=%d: p->s3.c0 = %f + I*%f\n", i, creal(p->s3.c0), cimag(p->s3.c0));
+//          printf("i=%d: p->s3.c1 = %f + I*%f\n", i, creal(p->s3.c1), cimag(p->s3.c1));
+//          printf("i=%d: p->s3.c2 = %f + I*%f\n", i, creal(p->s3.c2), cimag(p->s3.c2));
+        }
+      }
+    }
+  }
+
+  /* reset the ranlxd if neccessary */
+  if(reset) {
+    rlxd_reset(rlxd_state);
+  }
+  return;
+}
+
+/* Generates a volume source with Z4 noise */
+void z4_volume_source(spinor * const P, spinor * const Q,
+          const int sample, const int nstore, const int f)
+{
+  int x, y, z, t, i, reset = 0, seed;
+  int rlxd_state[105];
+  spinor * p;
+  double v[24];
+
+  /* save the ranlxd_state if neccessary */
+  if(ranlxd_init == 1) {
+    rlxd_get(rlxd_state);
+    reset = 1;
+  }
+
+  /* Compute the seed */
+  seed =(int) abs(1 + sample + f*10*97 + nstore*100*53 + g_cart_id*13);
+  printf("\n\n\nseed = %d\n\n\n",seed);
+
+  rlxd_init(2, seed);
+
+  for(t = 0; t < T; t++) {
+    for(x = 0; x < LX; x++) {
+      for(y =0; y < LY; y++) {
+        for(z = 0; z < LZ; z++) {
+          i = g_lexic2eosub[ g_ipt[t][x][y][z] ];
+          if((t+x+y+z+g_proc_coords[3]*LZ+g_proc_coords[2]*LY
+            + g_proc_coords[0]*T+g_proc_coords[1]*LX)%2 == 0) {
+            p = P + i;
+          }
+          else {
+            p = Q + i;
+          }
+          ranlxd(v,24);
+          p->s0.c0 = ( v[0]  < 0.5 ? ( v[12]  < 0.5 ? 1.0 : -1.0 ) : ( v[12]  < 0.5 ? I : -I ) );
+          p->s0.c1 = ( v[1]  < 0.5 ? ( v[13]  < 0.5 ? 1.0 : -1.0 ) : ( v[13]  < 0.5 ? I : -I ) );
+          p->s0.c2 = ( v[2]  < 0.5 ? ( v[14]  < 0.5 ? 1.0 : -1.0 ) : ( v[14]  < 0.5 ? I : -I ) );
+          p->s1.c0 = ( v[3]  < 0.5 ? ( v[15]  < 0.5 ? 1.0 : -1.0 ) : ( v[15]  < 0.5 ? I : -I ) );
+          p->s1.c1 = ( v[4]  < 0.5 ? ( v[16]  < 0.5 ? 1.0 : -1.0 ) : ( v[16]  < 0.5 ? I : -I ) );
+          p->s1.c2 = ( v[5]  < 0.5 ? ( v[17]  < 0.5 ? 1.0 : -1.0 ) : ( v[17]  < 0.5 ? I : -I ) );
+          p->s2.c0 = ( v[6]  < 0.5 ? ( v[18]  < 0.5 ? 1.0 : -1.0 ) : ( v[18]  < 0.5 ? I : -I ) );
+          p->s2.c1 = ( v[7]  < 0.5 ? ( v[19]  < 0.5 ? 1.0 : -1.0 ) : ( v[19]  < 0.5 ? I : -I ) );
+          p->s2.c2 = ( v[8]  < 0.5 ? ( v[20]  < 0.5 ? 1.0 : -1.0 ) : ( v[20]  < 0.5 ? I : -I ) );
+          p->s3.c0 = ( v[9]  < 0.5 ? ( v[21]  < 0.5 ? 1.0 : -1.0 ) : ( v[21]  < 0.5 ? I : -I ) );
+          p->s3.c1 = ( v[10] < 0.5 ? ( v[22]  < 0.5 ? 1.0 : -1.0 ) : ( v[22]  < 0.5 ? I : -I ) );
+          p->s3.c2 = ( v[11] < 0.5 ? ( v[23]  < 0.5 ? 1.0 : -1.0 ) : ( v[23]  < 0.5 ? I : -I ) );
+//          printf("i=%d: p->s0.c0 = %f + I*%f\n", i, creal(p->s0.c0), cimag(p->s0.c0));
+//          printf("i=%d: p->s0.c1 = %f + I*%f\n", i, creal(p->s0.c1), cimag(p->s0.c1));
+//          printf("i=%d: p->s0.c2 = %f + I*%f\n", i, creal(p->s0.c2), cimag(p->s0.c2));
+//          printf("i=%d: p->s1.c0 = %f + I*%f\n", i, creal(p->s1.c0), cimag(p->s1.c0));
+//          printf("i=%d: p->s1.c1 = %f + I*%f\n", i, creal(p->s1.c1), cimag(p->s1.c1));
+//          printf("i=%d: p->s1.c2 = %f + I*%f\n", i, creal(p->s1.c2), cimag(p->s1.c2));
+//          printf("i=%d: p->s2.c0 = %f + I*%f\n", i, creal(p->s2.c0), cimag(p->s2.c0));
+//          printf("i=%d: p->s2.c1 = %f + I*%f\n", i, creal(p->s2.c1), cimag(p->s2.c1));
+//          printf("i=%d: p->s2.c2 = %f + I*%f\n", i, creal(p->s2.c2), cimag(p->s2.c2));
+//          printf("i=%d: p->s3.c0 = %f + I*%f\n", i, creal(p->s3.c0), cimag(p->s3.c0));
+//          printf("i=%d: p->s3.c1 = %f + I*%f\n", i, creal(p->s3.c1), cimag(p->s3.c1));
+//          printf("i=%d: p->s3.c2 = %f + I*%f\n", i, creal(p->s3.c2), cimag(p->s3.c2));
+        }
       }
     }
   }
@@ -123,9 +263,9 @@ void gaussian_volume_source(spinor * const P, spinor * const Q,
 }
 
 void extended_pion_source(spinor * const P, spinor * const Q,
-			  spinor * const R, spinor * const S,
-			  const int t0,
-			  const double px, const double py, const double pz) {
+        spinor * const R, spinor * const S,
+        const int t0,
+        const double px, const double py, const double pz) {
   int lt, lx, ly, lz, i, x, y, z, id=0, t;
   int coords[4];
   spinor * p, * q, r;
@@ -144,27 +284,27 @@ void extended_pion_source(spinor * const P, spinor * const Q,
       ly = y - g_proc_coords[2]*LY;
       coords[2] = y / LY;
       for(z = 0; z < LZ*g_nproc_z; z++) {
-	lz = z - g_proc_coords[3]*LZ;
-	coords[3] = z / LZ;
+  lz = z - g_proc_coords[3]*LZ;
+  coords[3] = z / LZ;
 #ifdef MPI
-	MPI_Cart_rank(g_cart_grid, coords, &id);
+  MPI_Cart_rank(g_cart_grid, coords, &id);
 #endif
-	if(g_cart_id == id) {
-	  efac = cexp(-(px * x + py * y + pz * z) * I);
+  if(g_cart_id == id) {
+    efac = cexp(-(px * x + py * y + pz * z) * I);
 
-	  i = g_lexic2eosub[ g_ipt[lt][lx][ly][lz] ];
-	  if((lt+lx+ly+lz+g_proc_coords[3]*LZ+g_proc_coords[2]*LY 
-	      + g_proc_coords[0]*T+g_proc_coords[1]*LX)%2 == 0) {
-	    p = P + i;
-	    q = R + i;
-	  }
-	  else {
-	    p = Q + i;
-	    q = S + i;
-	  }
-	  _gamma5(r, (*q));
-	  _spinor_mul_complex((*p),efac,r);
-	}
+    i = g_lexic2eosub[ g_ipt[lt][lx][ly][lz] ];
+    if((lt+lx+ly+lz+g_proc_coords[3]*LZ+g_proc_coords[2]*LY
+        + g_proc_coords[0]*T+g_proc_coords[1]*LX)%2 == 0) {
+      p = P + i;
+      q = R + i;
+    }
+    else {
+      p = Q + i;
+      q = S + i;
+    }
+    _gamma5(r, (*q));
+    _spinor_mul_complex((*p),efac,r);
+  }
       }
     }
   }
@@ -172,8 +312,8 @@ void extended_pion_source(spinor * const P, spinor * const Q,
 }
 
 void source_generation_pion_only(spinor * const P, spinor * const Q,
-				 const int t,
-				 const int sample, const int nstore) {
+         const int t,
+         const int sample, const int nstore) {
 
   int reset = 0, i, x, y, z, is, ic, lt, lx, ly, lz, id=0;
   int coords[4], seed, r;
@@ -205,51 +345,51 @@ void source_generation_pion_only(spinor * const P, spinor * const Q,
       ly = y - g_proc_coords[2]*LY;
       coords[2] = y / LY;
       for(z = 0; z < LZ*g_nproc_z; z++) {
-	lz = z - g_proc_coords[3]*LZ;
-	coords[3] = z / LZ;
+  lz = z - g_proc_coords[3]*LZ;
+  coords[3] = z / LZ;
 #ifdef MPI
-	MPI_Cart_rank(g_cart_grid, coords, &id);
+  MPI_Cart_rank(g_cart_grid, coords, &id);
 #endif
-	for(is = 0; is < 4; is++) {
-	  for(ic = 0; ic < 3; ic++) {
-	    ranlxd(&rnumber, 1);
-	    if(g_cart_id  == id) {
-	      r = (int)floor(4.*rnumber);
-	      if(r == 0)
-	      {
-		si = sqr2;
-		co = sqr2;
-	      }
-	      else if(r == 1) {
-		si = -sqr2;
-		co = sqr2;
-	      }
-	      else if(r==2) {
-		si = sqr2;
-		co = -sqr2;
-	      }
-	      else {
-		si = -sqr2;
-		co = -sqr2;
-	      }
-	    
-	      i = g_lexic2eosub[ g_ipt[lt][lx][ly][lz] ];
-	      if((lt+lx+ly+lz+g_proc_coords[3]*LZ+g_proc_coords[2]*LY 
-		  + g_proc_coords[0]*T+g_proc_coords[1]*LX)%2 == 0) {
-		p = (_Complex double*)(P + i);
-	      }
-	      else {
-		p = (_Complex double*)(Q + i);
-	      }
-	      
-	      (*(p+3*is+ic)) = co + si * I;
-	    }
-	  }
-	}
+  for(is = 0; is < 4; is++) {
+    for(ic = 0; ic < 3; ic++) {
+      ranlxd(&rnumber, 1);
+      if(g_cart_id  == id) {
+        r = (int)floor(4.*rnumber);
+        if(r == 0)
+        {
+    si = sqr2;
+    co = sqr2;
+        }
+        else if(r == 1) {
+    si = -sqr2;
+    co = sqr2;
+        }
+        else if(r==2) {
+    si = sqr2;
+    co = -sqr2;
+        }
+        else {
+    si = -sqr2;
+    co = -sqr2;
+        }
+
+        i = g_lexic2eosub[ g_ipt[lt][lx][ly][lz] ];
+        if((lt+lx+ly+lz+g_proc_coords[3]*LZ+g_proc_coords[2]*LY
+      + g_proc_coords[0]*T+g_proc_coords[1]*LX)%2 == 0) {
+    p = (_Complex double*)(P + i);
+        }
+        else {
+    p = (_Complex double*)(Q + i);
+        }
+
+        (*(p+3*is+ic)) = co + si * I;
       }
     }
   }
-	    
+      }
+    }
+  }
+
   /* reset the ranlxd if neccessary */
   if(reset) {
     rlxd_reset(rlxd_state);
@@ -328,7 +468,7 @@ void source_generation_pion_zdir(spinor * const P, spinor * const Q,
                 p = (_Complex double*)(Q + i);
               }
               
-	      (*(p+3*is+ic)) = co + si * I;
+        (*(p+3*is+ic)) = co + si * I;
             }
           }
         }
@@ -350,10 +490,10 @@ void source_generation_pion_zdir(spinor * const P, spinor * const Q,
 
 
 void source_generation_nucleon(spinor * const P, spinor * const Q, 
-			       const int is, const int ic,
-			       const int t, const int nt, const int nx, 
-			       const int sample, const int nstore, 
-			       const int meson) {
+             const int is, const int ic,
+             const int t, const int nt, const int nx,
+             const int sample, const int nstore,
+             const int meson) {
 
   double rnumber, si=0., co=0., sqr2;
   int rlxd_state[105];
@@ -389,63 +529,63 @@ void source_generation_nucleon(spinor * const P, spinor * const Q,
       lx = xx - g_proc_coords[1]*LX;
       coords[1] = xx / LX;
       for(yy = 0; yy < LY*g_nproc_y; yy+=nx) {
-	ly = yy - g_proc_coords[2]*LY;
-	coords[2] = yy / LY;
-	for(zz = 0; zz < LZ*g_nproc_z; zz+=nx) {
-	  lz = zz - g_proc_coords[3]*LZ;
-	  coords[3] = zz / LZ;
+  ly = yy - g_proc_coords[2]*LY;
+  coords[2] = yy / LY;
+  for(zz = 0; zz < LZ*g_nproc_z; zz+=nx) {
+    lz = zz - g_proc_coords[3]*LZ;
+    coords[3] = zz / LZ;
 #ifdef MPI
-	  MPI_Cart_rank(g_cart_grid, coords, &id);
+    MPI_Cart_rank(g_cart_grid, coords, &id);
 #endif
-	  ranlxd(&rnumber, 1);
-	  if(g_cart_id  == id) {
-	    if(meson) {
-	      r = (int)floor(4.*rnumber);
-	      if(r == 0) {
-		si = sqr2;
-		co = sqr2;
-	      }
-	      else if(r == 1) {
-		si = -sqr2;
-		co = sqr2;
-	      }
-	      else if(r==2) {
-		si = sqr2;
-		co = -sqr2;
-	      }
-	      else {
-		si = -sqr2;
-		co = -sqr2;
-	      }
-	    }
-	    else {
-	      r = (int)floor(3.*rnumber);
-	      if(r == 0) {
-		si = s0;
-		co = c0;
-	      }
-	      else if(r == 1) {
-		si = s1;
-		co = c1;
-	      }
-	      else {
-		si = s2;
-		co = c2;
-	      }
-	    }
-	    
-	    i = g_lexic2eosub[ g_ipt[lt][lx][ly][lz] ];
-	    if((lt+lx+ly+lz+g_proc_coords[3]*LZ+g_proc_coords[2]*LY 
-		+ g_proc_coords[0]*T+g_proc_coords[1]*LX)%2 == 0) {
-	      p = (_Complex double*)(P + i);
-	    }
-	    else {
-	      p = (_Complex double*)(Q + i);
-	    }
+    ranlxd(&rnumber, 1);
+    if(g_cart_id  == id) {
+      if(meson) {
+        r = (int)floor(4.*rnumber);
+        if(r == 0) {
+    si = sqr2;
+    co = sqr2;
+        }
+        else if(r == 1) {
+    si = -sqr2;
+    co = sqr2;
+        }
+        else if(r==2) {
+    si = sqr2;
+    co = -sqr2;
+        }
+        else {
+    si = -sqr2;
+    co = -sqr2;
+        }
+      }
+      else {
+        r = (int)floor(3.*rnumber);
+        if(r == 0) {
+    si = s0;
+    co = c0;
+        }
+        else if(r == 1) {
+    si = s1;
+    co = c1;
+        }
+        else {
+    si = s2;
+    co = c2;
+        }
+      }
 
-	    (*(p+3*is+ic)) = co + si * I;
-	  }
-	}
+      i = g_lexic2eosub[ g_ipt[lt][lx][ly][lz] ];
+      if((lt+lx+ly+lz+g_proc_coords[3]*LZ+g_proc_coords[2]*LY
+    + g_proc_coords[0]*T+g_proc_coords[1]*LX)%2 == 0) {
+        p = (_Complex double*)(P + i);
+      }
+      else {
+        p = (_Complex double*)(Q + i);
+      }
+
+      (*(p+3*is+ic)) = co + si * I;
+    }
+  }
       }
     }
   }

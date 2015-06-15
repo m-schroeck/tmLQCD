@@ -20,10 +20,12 @@
  *
  * This is a program to approximate the disconnected diagrams (aka. bubbles).
  * On a given gaugefield configuration, it calculates
+ *
  * B(x,t)^{ba_0}_{\beta\alpha_0} \equiv \sum_{x,t} D^{-1}(x,t;x_0,t_0)^{ba_0}_{\beta\alpha_0}\;\delta_{xx_0}\,\delta_{tt_0}
 	\quad\forall\; a_0, \alpha_0, x_0, t_0
+ *
  * via stochastic approximation and full dilution in color, space and time.
- * Only at the end the bubbles B(x,t) are stored to disk, not that B(x,t) has the
+ * Only at the end the bubbles B(x,t) are stored to disk, note that B(x,t) has the
  * same dimensions as a regular point-to-all quark propagator.
  *
  *
@@ -88,6 +90,7 @@
 #include "operator/Dov_psi.h"
 #include "solver/spectral_proj.h"
 #include "meas/measurements.h"
+#include "source_generation.h"
 
 extern int nstore;
 int check_geometry();
@@ -103,11 +106,18 @@ int main(int argc, char *argv[])
   char datafilename[206];
   char parameterfilename[206];
   char conf_filename[50];
+  char basefilename[100];
   char * input_filename = NULL;
   char * filename = NULL;
   double plaquette_energy;
   struct stout_parameters params_smear;
   spinor **s, *s_;
+  spinor * psrc;
+  spinor * pzn;
+  spinor * bubbles[2];
+  _Complex double * p_cplx_bbl[2];
+  _Complex double * p_cplx_src[2];
+  _Complex double * p_cplx_prp[2];
 
 #ifdef _KOJAK_INST
 #pragma pomp inst init
@@ -156,9 +166,12 @@ int main(int argc, char *argv[])
   init_openmp();
 #endif
 
-  /* this DBW2 stuff is not needed for the inversion ! */
-  if (g_dflgcr_flag == 1) {
-    even_odd_flag = 0;
+  if (!even_odd_flag) {
+    even_odd_flag = 1;
+    if (g_cart_id == 0) {
+      printf("# Enforcing even_odd_flag = 1! \n");
+      fflush(stdout);
+    }
   }
   g_rgi_C1 = 0;
   if (Nsave == 0) {
@@ -180,7 +193,7 @@ int main(int argc, char *argv[])
   /* we need to make sure that we don't have even_odd_flag = 1 */
   /* if any of the operators doesn't use it                    */
   /* in this way even/odd can still be used by other operators */
-  for(j = 0; j < no_operators; j++) if(!operator_list[j].even_odd_flag) even_odd_flag = 0;
+//  for(j = 0; j < no_operators; j++) if(!operator_list[j].even_odd_flag) even_odd_flag = 0;
 
 #ifndef MPI
   g_dbw2rand = 0;
@@ -213,10 +226,10 @@ int main(int argc, char *argv[])
     }
   }
   if (even_odd_flag) {
-    j = init_spinor_field(VOLUMEPLUSRAND / 2, NO_OF_SPINORFIELDS);
+    j = init_spinor_field(VOLUMEPLUSRAND / 2, NO_OF_SPINORFIELDS+4);
   }
   else {
-    j = init_spinor_field(VOLUMEPLUSRAND, NO_OF_SPINORFIELDS);
+    j = init_spinor_field(VOLUMEPLUSRAND, NO_OF_SPINORFIELDS+2);
   }
   if (j != 0) {
     fprintf(stderr, "Not enough memory for spinor fields! Aborting...\n");
@@ -474,23 +487,130 @@ int main(int argc, char *argv[])
         }
       }
 
+      /* *************** START CALCULATING BUBBLES HERE *************** */
+
+      /* bubbles (g_spinor_field[6-7]) */
+      bubbles[0] = g_spinor_field[6];
+      bubbles[1] = g_spinor_field[7];
+
       for(isample = 0; isample < no_samples; isample++) {
-        for (ix = index_start; ix < index_end; ix++) {
-          if (g_cart_id == 0) {
-            fprintf(stdout, "#\n"); /*Indicate starting of new index*/
+
+        /* get Z2 noise (store it in g_spinor_field[4-5]) */
+        z4_volume_source(g_spinor_field[4], g_spinor_field[5], isample, nstore, (int)(100.0*operator_list[op_id].mu) );
+
+        for (int bs=0; bs<4; bs++)
+          for (int bc=0; bc<3; bc++)
+          {
+        	/* initialize bubbles */
+			zero_spinor_field(bubbles[0], VOLUME / 2);
+			zero_spinor_field(bubbles[1], VOLUME / 2);
+
+			/* we use g_spinor_field[0-7] for sources and props for the moment */
+			/* 0-3 in case of 1 flavour  */
+			/* 0-7 in case of 2 flavours */
+
+			operator_list[op_id].sr0   = g_spinor_field[0];
+			operator_list[op_id].sr1   = g_spinor_field[1];
+			operator_list[op_id].prop0 = g_spinor_field[2];
+			operator_list[op_id].prop1 = g_spinor_field[3];
+
+            for (int bt=0; bt<T*g_nproc_t; bt++) {
+				if (g_cart_id == 0) {
+					fprintf(stdout, "#\n"); /*Indicate starting of new index*/
+				}
+
+				zero_spinor_field(operator_list[op_id].sr0, VOLUME / 2);
+				zero_spinor_field(operator_list[op_id].sr1, VOLUME / 2);
+
+				/* dilution */
+				for(int t = 0; t < T; t++)
+					for(int x = 0; x < LX; x++)
+					  for(int y = 0; y < LY; y++)
+						for(int z = 0; z < LZ; z++) {
+						  i = g_lexic2eosub[ g_ipt[t][x][y][z] ];
+						  if((t+x+y+z+g_proc_coords[3]*LZ+g_proc_coords[2]*LY
+							+ g_proc_coords[0]*T+g_proc_coords[1]*LX)%2 == 0) {
+							psrc = operator_list[op_id].sr0 + i;
+							pzn = g_spinor_field[4] + i;
+						  }
+						  else {
+							psrc = operator_list[op_id].sr1 + i;
+							pzn = g_spinor_field[5] + i;
+						  }
+						  if( t+g_proc_coords[0]*T==bt ) {
+
+							  if( bs==0 ) {
+								  if( bc==0 )
+									  psrc->s0.c0 = pzn->s0.c0;
+								  else if( bc==1 )
+									  psrc->s0.c1 = pzn->s0.c1;
+								  else if( bc==2 )
+									  psrc->s0.c2 = pzn->s0.c2;
+							  }
+							  else if( bs==1 ) {
+								  if( bc==0 )
+									  psrc->s1.c0 = pzn->s1.c0;
+								  else if( bc==1 )
+									  psrc->s1.c1 = pzn->s1.c1;
+								  else if( bc==2 )
+									  psrc->s1.c2 = pzn->s1.c2;
+							  }
+							  else if( bs==2 ) {
+								  if( bc==0 )
+									  psrc->s2.c0 = pzn->s2.c0;
+								  else if( bc==1 )
+									  psrc->s2.c1 = pzn->s2.c1;
+								  else if( bc==2 )
+									  psrc->s2.c2 = pzn->s2.c2;
+							  }
+							  else if( bs==3 ) {
+								  if( bc==0 )
+									  psrc->s3.c0 = pzn->s3.c0;
+								  else if( bc==1 )
+									  psrc->s3.c1 = pzn->s3.c1;
+								  else if( bc==2 )
+									  psrc->s3.c2 = pzn->s3.c2;
+							  }
+						  }
+						}
+#ifdef MPI
+						MPI_Barrier(MPI_COMM_WORLD);
+#endif
+
+				//randomize initial guess for eigcg if needed-----experimental
+				if( (operator_list[op_id].solver == INCREIGCG) && (operator_list[op_id].solver_params.eigcg_rand_guess_opt) ){ //randomize the initial guess
+				  gaussian_volume_source( operator_list[op_id].prop0, operator_list[op_id].prop1,isample,ix,0); //need to check this
+				}
+				operator_list[op_id].inverter(op_id, index_start, 0);
+
+				/* gather bubbles */
+				for( int iv=0; iv<VOLUME/2; iv++ ) {
+					p_cplx_bbl[0] = bubbles[0]+iv;
+					p_cplx_bbl[1] = bubbles[1]+iv;
+					p_cplx_src[0] = operator_list[op_id].sr0+iv;
+					p_cplx_src[1] = operator_list[op_id].sr1+iv;
+					p_cplx_prp[0] = operator_list[op_id].prop0+iv;
+					p_cplx_prp[1] = operator_list[op_id].prop1+iv;
+
+					for( int is=0; is<4; is++ )
+						for( int ic=0; ic<3; ic++ ) {
+							p_cplx_bbl[0][is*3+ic] += p_cplx_prp[0][is*3+ic] + conj(p_cplx_src[0][bs*3+bc]);
+							p_cplx_bbl[1][is*3+ic] += p_cplx_prp[1][is*3+ic] + conj(p_cplx_src[1][bs*3+bc]);
+						}
+				}
+			  }
+
+              /* write bubbles for current bs,bc */
+              operator_list[op_id].prop0 = bubbles[0];
+              operator_list[op_id].prop1 = bubbles[1];
+
+              sprintf(basefilename, "bubbles.s%dc%d", bs, bc);
+              SourceInfo.basename = basefilename;
+              operator_list[op_id].write_prop( op_id, 0, 0 );
           }
-          /* we use g_spinor_field[0-7] for sources and props for the moment */
-          /* 0-3 in case of 1 flavour  */
-          /* 0-7 in case of 2 flavours */
-          prepare_source(nstore, isample, ix, op_id, read_source_flag, source_location);
-          //randmize initial guess for eigcg if needed-----experimental
-          if( (operator_list[op_id].solver == INCREIGCG) && (operator_list[op_id].solver_params.eigcg_rand_guess_opt) ){ //randomize the initial guess
-              gaussian_volume_source( operator_list[op_id].prop0, operator_list[op_id].prop1,isample,ix,0); //need to check this
-          } 
-          operator_list[op_id].inverter(op_id, index_start, 1);
-        }
       }
 
+      /* ***************  END CALCULATING BUBBLES HERE  *************** */
 
       if(use_preconditioning==1 && operator_list[op_id].precWS!=NULL ){
         /* free preconditioning workspace */
