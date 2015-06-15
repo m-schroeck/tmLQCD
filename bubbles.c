@@ -91,6 +91,9 @@
 #include "solver/spectral_proj.h"
 #include "meas/measurements.h"
 #include "source_generation.h"
+#ifdef QUDA
+#  include "quda_interface.h"
+#endif
 
 extern int nstore;
 int check_geometry();
@@ -650,6 +653,9 @@ int main(int argc, char *argv[])
   free_chi_spinor_field();
   free(filename);
   free(input_filename);
+#ifdef QUDA
+  _endQuda();
+#endif
 #ifdef MPI
   MPI_Barrier(MPI_COMM_WORLD);
   MPI_Finalize();
