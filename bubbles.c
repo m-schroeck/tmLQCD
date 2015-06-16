@@ -596,6 +596,34 @@ int main(int argc, char *argv[])
 						MPI_Barrier(MPI_COMM_WORLD);
 #endif
 
+#if 0
+				// check sources here (for blocksz 2)
+				printf("\n\n***************************\n");
+				printf("*** bt=%d, bs=%d, bc=%d *** \n",bt,bs,bc);
+				printf("(t,x,y,z) (is,ic)\n",bt,bs,bc);
+				for(int t = 0; t < T; t++)
+					for(int x = 0; x < LX; x++)
+					  for(int y = 0; y < LY; y++)
+						for(int z = 0; z < LZ; z++) {
+						  i = g_lexic2eosub[ g_ipt[t][x][y][z] ];
+						  if((t+x+y+z+g_proc_coords[3]*LZ+g_proc_coords[2]*LY
+							+ g_proc_coords[0]*T+g_proc_coords[1]*LX)%2 == 0) {
+							p_cplx_src[0] = (_Complex double*) (operator_list[op_id].sr0+i);
+						  }
+						  else {
+							p_cplx_src[0] = (_Complex double*) (operator_list[op_id].sr1+i);
+						  }
+						  for( int is=0; is<4; is++ )
+							for( int ic=0; ic<3; ic++ ) {
+								if( cabs(p_cplx_src[0][is*3+ic]) > 0.0
+										&& ( ((g_proc_coords[0]*T+t)!=bt && (g_proc_coords[0]*T+t)!=bt+1) || is!=bs || ic!=bc ) )
+									printf("There is a problem! (%d,%d,%d,%d) (%d,%d): src = %f + I*%f\n", t,x,y,z,is,ic,creal(p_cplx_src[0][is*3+ic]),cimag(p_cplx_src[0][is*3+ic]));
+								else if( cabs(p_cplx_src[0][is*3+ic]) == 0.0
+										&& ( ((g_proc_coords[0]*T+t)==bt  || (g_proc_coords[0]*T+t)==bt+1) && is==bs && ic==bc ) )
+									printf("There is a problem! (%d,%d,%d,%d) (%d,%d): src = %f + I*%f\n", t,x,y,z,is,ic,creal(p_cplx_src[0][is*3+ic]),cimag(p_cplx_src[0][is*3+ic]));
+							}
+						}
+#endif
 				//randomize initial guess for eigcg if needed-----experimental
 				if( (operator_list[op_id].solver == INCREIGCG) && (operator_list[op_id].solver_params.eigcg_rand_guess_opt) ){ //randomize the initial guess
 				  gaussian_volume_source( operator_list[op_id].prop0, operator_list[op_id].prop1,isample,ix,0); //need to check this
@@ -607,12 +635,12 @@ int main(int argc, char *argv[])
 
 				/* gather bubbles */
 				for( int iv=0; iv<VOLUME/2; iv++ ) {
-					p_cplx_bbl[0] = (_Complex double*) bubbles[0]+iv;
-					p_cplx_bbl[1] = (_Complex double*) bubbles[1]+iv;
-					p_cplx_src[0] = (_Complex double*) operator_list[op_id].sr0+iv;
-					p_cplx_src[1] = (_Complex double*) operator_list[op_id].sr1+iv;
-					p_cplx_prp[0] = (_Complex double*) operator_list[op_id].prop0+iv;
-					p_cplx_prp[1] = (_Complex double*) operator_list[op_id].prop1+iv;
+					p_cplx_bbl[0] = (_Complex double*) (bubbles[0]+iv);
+					p_cplx_bbl[1] = (_Complex double*) (bubbles[1]+iv);
+					p_cplx_src[0] = (_Complex double*) (operator_list[op_id].sr0+iv);
+					p_cplx_src[1] = (_Complex double*) (operator_list[op_id].sr1+iv);
+					p_cplx_prp[0] = (_Complex double*) (operator_list[op_id].prop0+iv);
+					p_cplx_prp[1] = (_Complex double*) (operator_list[op_id].prop1+iv);
 
 					for( int is=0; is<4; is++ )
 						for( int ic=0; ic<3; ic++ ) {
@@ -620,7 +648,7 @@ int main(int argc, char *argv[])
 							p_cplx_bbl[1][is*3+ic] += p_cplx_prp[1][is*3+ic] + conj(p_cplx_src[1][bs*3+bc]);
 						}
 				}
-			  }
+			  } /* end bt */
 
               /* write bubbles for current bs,bc */
               operator_list[op_id].prop0 = bubbles[0];
@@ -630,8 +658,8 @@ int main(int argc, char *argv[])
               SourceInfo.basename = basefilename;
               SourceInfo.nstore = nstore;
               operator_list[op_id].write_prop( op_id, 0, 0 );
-          }
-      }
+          } /* end bs,bc */
+      } /* end isample */
 
       /* ***************  END CALCULATING BUBBLES HERE  *************** */
 
