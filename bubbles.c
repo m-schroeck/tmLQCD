@@ -124,8 +124,6 @@ int main(int argc, char *argv[])
   _Complex double * p_cplx_src[2];
   _Complex double * p_cplx_prp[2];
 
-  double startTime = gettime();
-
 #ifdef _KOJAK_INST
 #pragma pomp inst init
 #pragma pomp inst begin(main)
@@ -159,6 +157,8 @@ int main(int argc, char *argv[])
 #else
   g_proc_id = 0;
 #endif
+
+  double startTime = gettime();
 
   process_args(argc,argv,&input_filename,&filename);
   set_default_filenames(&input_filename, &filename);
