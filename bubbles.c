@@ -512,7 +512,7 @@ int main(int argc, char *argv[])
 
       for(isample = 0; isample < 1 /*no_samples*/; isample++) {
 
-        /* get Z2 noise (store it in g_spinor_field[4-5]) */
+        /* get Z4 noise (store it in g_spinor_field[4-5]) */
         z4_volume_source(g_spinor_field[4], g_spinor_field[5], isample, nstore, (int)(100.0*operator_list[op_id].mu) );
 
         for (int bs=0; bs<4; bs++)
@@ -644,8 +644,8 @@ int main(int argc, char *argv[])
 
 					for( int is=0; is<4; is++ )
 						for( int ic=0; ic<3; ic++ ) {
-							p_cplx_bbl[0][is*3+ic] += p_cplx_prp[0][is*3+ic] + conj(p_cplx_src[0][bs*3+bc]);
-							p_cplx_bbl[1][is*3+ic] += p_cplx_prp[1][is*3+ic] + conj(p_cplx_src[1][bs*3+bc]);
+							p_cplx_bbl[0][is*3+ic] += p_cplx_prp[0][is*3+ic] * conj(p_cplx_src[0][bs*3+bc]);
+							p_cplx_bbl[1][is*3+ic] += p_cplx_prp[1][is*3+ic] * conj(p_cplx_src[1][bs*3+bc]);
 						}
 				}
 			  } /* end bt */
