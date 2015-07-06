@@ -62,7 +62,6 @@
 #  include "quda_interface.h"
 #endif
 
-
 void dummy_D(spinor * const, spinor * const);
 void dummy_DbD(spinor * const s, spinor * const r, spinor * const p, spinor * const q);
 void op_invert(const int op_id, const int index_start, const int write_prop);
@@ -83,7 +82,8 @@ int add_operator(const int type) {
   optr->kappa = _default_g_kappa;
   optr->mu = _default_g_mu;
   optr->c_sw = _default_c_sw;
-  optr->sloppy_precision = _default_g_sloppy_precision_flag;
+  optr->sloppy_precision = _default_operator_sloppy_precision_flag;
+  optr->compression_type = _default_compression_type;
   optr->coefs = NULL;
   optr->rel_prec = _default_g_relative_precision_flag;
   optr->eps_sq = _default_solver_precision;
@@ -216,7 +216,7 @@ int init_operators() {
       }
     }
 
-    if(optr->use_qudainverter) {
+    if(optr->external_inverter==QUDA_INVERTER ) {
 #ifdef QUDA
       _initQuda();
 #else
@@ -278,20 +278,13 @@ void op_invert(const int op_id, const int index_start, const int write_prop) {
   else {
     g_precWS=NULL;
   }
-  if(optr->use_qudainverter) {
-#ifdef QUDA
-    optr->iterations = invert_eo_quda(optr->prop0, optr->prop1, optr->sr0, optr->sr1,
-                                      optr->eps_sq, optr->maxiter,
-                                      optr->solver, optr->rel_prec,
-                                      optr->even_odd_flag, optr->solver_params);
-#endif
-  }
-  else {
-    optr->iterations = invert_eo( optr->prop0, optr->prop1, optr->sr0, optr->sr1,
-                                    optr->eps_sq, optr->maxiter,
-                                    optr->solver, optr->rel_prec,
-                                    0, optr->even_odd_flag,optr->no_extra_masses, optr->extra_masses, optr->solver_params, optr->id );
-  }
+  optr->iterations = invert_eo( optr->prop0, optr->prop1, optr->sr0, optr->sr1,
+                                  optr->eps_sq, optr->maxiter,
+                                  optr->solver, optr->rel_prec,
+                                  0, optr->even_odd_flag,optr->no_extra_masses,
+                                  optr->extra_masses, optr->solver_params, optr->id,
+                                  optr->external_inverter, optr->sloppy_precision, optr->compression_type);
+
   /* check result */
   M_full(g_spinor_field[DUM_DERI], g_spinor_field[DUM_DERI+1], optr->prop0, optr->prop1);
       }
@@ -300,20 +293,12 @@ void op_invert(const int op_id, const int index_start, const int write_prop) {
   /* to match clover_inv in Qsw_psi */
   sw_invert(EE, optr->mu);
 
-  if(optr->use_qudainverter) {
-#ifdef QUDA
-    optr->iterations = invert_eo_quda(optr->prop0, optr->prop1, optr->sr0, optr->sr1,
+  optr->iterations = invert_clover_eo(optr->prop0, optr->prop1, optr->sr0, optr->sr1,
                                       optr->eps_sq, optr->maxiter,
-                                      optr->solver, optr->rel_prec,
-                                      optr->even_odd_flag, optr->solver_params);
-#endif
-  }
-  else {
-    optr->iterations = invert_clover_eo(optr->prop0, optr->prop1, optr->sr0, optr->sr1,
-                                        optr->eps_sq, optr->maxiter,
-                                        optr->solver, optr->rel_prec,optr->solver_params,
-                                        &g_gauge_field, &Qsw_pm_psi, &Qsw_minus_psi);
-  }
+                                      optr->solver, optr->rel_prec,optr->solver_params,
+                                      &g_gauge_field, &Qsw_pm_psi, &Qsw_minus_psi,
+                                      optr->external_inverter, optr->sloppy_precision, optr->compression_type);
+
   /* check result */
    Msw_full(g_spinor_field[DUM_DERI], g_spinor_field[DUM_DERI+1], optr->prop0, optr->prop1);
       }
@@ -355,36 +340,18 @@ void op_invert(const int op_id, const int index_start, const int write_prop) {
 
     for(i = 0; i < SourceInfo.no_flavours; i++) {
     if(optr->type != DBCLOVER) {
-      if(optr->use_qudainverter) {
-#ifdef QUDA
-        optr->iterations = invert_doublet_eo_quda( optr->prop0, optr->prop1, optr->prop2, optr->prop3,
-                                                   optr->sr0, optr->sr1, optr->sr2, optr->sr3,
-                                                   optr->eps_sq, optr->maxiter,
-                                                   optr->solver, optr->rel_prec, optr->even_odd_flag );
-#endif
-      }
-      else {
-        optr->iterations = invert_doublet_eo( optr->prop0, optr->prop1, optr->prop2, optr->prop3,
-                                              optr->sr0, optr->sr1, optr->sr2, optr->sr3,
-                                              optr->eps_sq, optr->maxiter,
-                                              optr->solver, optr->rel_prec);
-      }
+      optr->iterations = invert_doublet_eo( optr->prop0, optr->prop1, optr->prop2, optr->prop3,
+                                            optr->sr0, optr->sr1, optr->sr2, optr->sr3,
+                                            optr->eps_sq, optr->maxiter,
+                                            optr->solver, optr->rel_prec,
+                                            optr->external_inverter, optr->sloppy_precision, optr->compression_type);
     }
     else {
-      if(optr->use_qudainverter) {
-#ifdef QUDA
-        optr->iterations = invert_doublet_eo_quda( optr->prop0, optr->prop1, optr->prop2, optr->prop3,
-                                                   optr->sr0, optr->sr1, optr->sr2, optr->sr3,
-                                                   optr->eps_sq, optr->maxiter,
-                                                   optr->solver, optr->rel_prec, optr->even_odd_flag);
-#endif
-      }
-      else {
-        optr->iterations = invert_cloverdoublet_eo( optr->prop0, optr->prop1, optr->prop2, optr->prop3,
-                                                    optr->sr0, optr->sr1, optr->sr2, optr->sr3,
-                                                    optr->eps_sq, optr->maxiter,
-                                                    optr->solver, optr->rel_prec);
-      }
+      optr->iterations = invert_cloverdoublet_eo( optr->prop0, optr->prop1, optr->prop2, optr->prop3,
+                                                  optr->sr0, optr->sr1, optr->sr2, optr->sr3,
+                                                  optr->eps_sq, optr->maxiter,
+                                                  optr->solver, optr->rel_prec,
+                                                  optr->external_inverter, optr->sloppy_precision, optr->compression_type);
       }
       g_mu = optr->mubar;
       if(optr->type != DBCLOVER) {
