@@ -421,6 +421,8 @@ static inline void rmQuotes(char *str){
 
 ^BeginGPU                          BEGIN(INITGPU);
 
+^DilutionBlocksizeT{EQL}           BEGIN(DILUTIONBST);
+
 
 
 
