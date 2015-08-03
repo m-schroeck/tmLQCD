@@ -501,6 +501,8 @@ int main(int argc, char *argv[])
 
       /* *************** START CALCULATING BUBBLES HERE *************** */
 
+//      no_samples = 100;
+
       /* bubbles (g_spinor_field[6-7]) */
       bubbles[0] = g_spinor_field[6];
       bubbles[1] = g_spinor_field[7];
@@ -509,11 +511,6 @@ int main(int argc, char *argv[])
       strcpy(plainbasefilename,SourceInfo.basename);
 
       int invcounter=1;
-
-      for(isample = 0; isample < 1 /*no_samples*/; isample++) {
-
-        /* get Z4 noise (store it in g_spinor_field[4-5]) */
-        z4_volume_source(g_spinor_field[4], g_spinor_field[5], isample, nstore, (int)(100.0*operator_list[op_id].mu) );
 
         for (int bs=0; bs<4; bs++)
           for (int bc=0; bc<3; bc++)
@@ -530,6 +527,12 @@ int main(int argc, char *argv[])
 			operator_list[op_id].sr1   = g_spinor_field[1];
 			operator_list[op_id].prop0 = g_spinor_field[2];
 			operator_list[op_id].prop1 = g_spinor_field[3];
+
+			for(isample = 0; isample < no_samples; isample++) {
+
+				/* get Z4 noise (store it in g_spinor_field[4-5]) */
+				z4_volume_source(g_spinor_field[4], g_spinor_field[5], isample, nstore, (int)(100.0*operator_list[op_id].mu) );
+
 
             for (int bt=0; bt<T*g_nproc_t; bt+=dilutionblksz_t) {
 				if (g_cart_id == 0) {
@@ -637,18 +640,19 @@ int main(int argc, char *argv[])
 				for( int iv=0; iv<VOLUME/2; iv++ ) {
 					p_cplx_bbl[0] = (_Complex double*) (bubbles[0]+iv);
 					p_cplx_bbl[1] = (_Complex double*) (bubbles[1]+iv);
-					p_cplx_src[0] = (_Complex double*) (operator_list[op_id].sr0+iv);
-					p_cplx_src[1] = (_Complex double*) (operator_list[op_id].sr1+iv);
+					p_cplx_src[0] = (_Complex double*) (operator_list[op_id].sr0);
+					p_cplx_src[1] = (_Complex double*) (operator_list[op_id].sr1);
 					p_cplx_prp[0] = (_Complex double*) (operator_list[op_id].prop0+iv);
 					p_cplx_prp[1] = (_Complex double*) (operator_list[op_id].prop1+iv);
 
 					for( int is=0; is<4; is++ )
 						for( int ic=0; ic<3; ic++ ) {
-							p_cplx_bbl[0][is*3+ic] += p_cplx_prp[0][is*3+ic] * conj(p_cplx_src[0][bs*3+bc]);
-							p_cplx_bbl[1][is*3+ic] += p_cplx_prp[1][is*3+ic] * conj(p_cplx_src[1][bs*3+bc]);
+							p_cplx_bbl[0][is*3+ic] += p_cplx_prp[0][is*3+ic] * conj(p_cplx_src[0][bs*3+bc]) / (double)no_samples;
+							p_cplx_bbl[1][is*3+ic] += p_cplx_prp[1][is*3+ic] * conj(p_cplx_src[0][bs*3+bc]) / (double)no_samples;
 						}
 				}
 			  } /* end bt */
+            } /* end isample */
 
               /* write bubbles for current bs,bc */
               operator_list[op_id].prop0 = bubbles[0];
@@ -659,7 +663,6 @@ int main(int argc, char *argv[])
               SourceInfo.nstore = nstore;
               operator_list[op_id].write_prop( op_id, 0, 0 );
           } /* end bs,bc */
-      } /* end isample */
 
       /* ***************  END CALCULATING BUBBLES HERE  *************** */
 
