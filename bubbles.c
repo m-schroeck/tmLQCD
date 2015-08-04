@@ -120,9 +120,9 @@ int main(int argc, char *argv[])
   spinor * psrc;
   spinor * pzn;
   spinor * bubbles[2];
-  _Complex double * p_cplx_bbl[2];
-  _Complex double * p_cplx_src[2];
-  _Complex double * p_cplx_prp[2];
+  _Complex double * p_cplx_bbl;
+  _Complex double * p_cplx_src;
+  _Complex double * p_cplx_prp;
 
 #ifdef _KOJAK_INST
 #pragma pomp inst init
@@ -501,7 +501,7 @@ int main(int argc, char *argv[])
 
       /* *************** START CALCULATING BUBBLES HERE *************** */
 
-//      no_samples = 100;
+      no_samples = 1000;
 
       /* bubbles (g_spinor_field[6-7]) */
       bubbles[0] = g_spinor_field[6];
@@ -633,22 +633,31 @@ int main(int argc, char *argv[])
 				}
 				/* invert */
 				if(g_proc_id == 0)
-					printf("\n# Starting inversion %d/%d\n", invcounter++, 12*((g_nproc_t*T)/dilutionblksz_t));
+					printf("\n# Starting inversion %d/%d\n", invcounter++, 12*no_samples*((g_nproc_t*T)/dilutionblksz_t));
 				operator_list[op_id].inverter(op_id, index_start, 0);
 
 				/* gather bubbles */
-				for( int iv=0; iv<VOLUME/2; iv++ ) {
-					p_cplx_bbl[0] = (_Complex double*) (bubbles[0]+iv);
-					p_cplx_bbl[1] = (_Complex double*) (bubbles[1]+iv);
-					p_cplx_src[0] = (_Complex double*) (operator_list[op_id].sr0);
-					p_cplx_src[1] = (_Complex double*) (operator_list[op_id].sr1);
-					p_cplx_prp[0] = (_Complex double*) (operator_list[op_id].prop0+iv);
-					p_cplx_prp[1] = (_Complex double*) (operator_list[op_id].prop1+iv);
+				for(int t = 0; t < T; t++)
+					for(int x = 0; x < LX; x++)
+					  for(int y = 0; y < LY; y++)
+						for(int z = 0; z < LZ; z++) {
+						  i = g_lexic2eosub[ g_ipt[t][x][y][z] ];
+						  if((t+x+y+z+g_proc_coords[3]*LZ+g_proc_coords[2]*LY
+							+ g_proc_coords[0]*T+g_proc_coords[1]*LX)%2 == 0)
+						  {
+							  p_cplx_bbl = (_Complex double*) (bubbles[0]+i);
+							  p_cplx_src = (_Complex double*) (operator_list[op_id].sr0);
+							  p_cplx_prp = (_Complex double*) (operator_list[op_id].prop0+i);
+						  }
+						  else {
+							  p_cplx_bbl = (_Complex double*) (bubbles[1]+i);
+							  p_cplx_src = (_Complex double*) (operator_list[op_id].sr0);
+							  p_cplx_prp = (_Complex double*) (operator_list[op_id].prop1+i);
+						  }
 
 					for( int is=0; is<4; is++ )
 						for( int ic=0; ic<3; ic++ ) {
-							p_cplx_bbl[0][is*3+ic] += p_cplx_prp[0][is*3+ic] * conj(p_cplx_src[0][bs*3+bc]) / (double)no_samples;
-							p_cplx_bbl[1][is*3+ic] += p_cplx_prp[1][is*3+ic] * conj(p_cplx_src[0][bs*3+bc]) / (double)no_samples;
+							p_cplx_bbl[is*3+ic] += p_cplx_prp[is*3+ic] * conj(p_cplx_src[bs*3+bc]) / (double)no_samples;
 						}
 				}
 			  } /* end bt */
