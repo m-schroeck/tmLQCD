@@ -1,0 +1,24 @@
+L = 16            
+T = 16
+
+
+DebugLevel = 3
+2kappaMu = 0.05
+kappa = 0.177
+BCAngleT = 0
+DisableIOChecks = yes
+UseRelativePrecision = no
+UseEvenOdd = yes
+OmpNumThreads = 1
+NoSamples = 1
+SourceType = Volume
+
+
+BeginOperator TMWILSON
+  2kappaMu = 0.05
+  kappa = 0.177
+  UseEvenOdd = yes
+  Solver = CG
+  SolverPrecision = 1e-20
+  MaxSolverIterations = 10000
+EndOperator

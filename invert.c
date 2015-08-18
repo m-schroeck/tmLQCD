@@ -104,6 +104,9 @@ int main(int argc, char *argv[])
   struct stout_parameters params_smear;
   spinor **s, *s_;
 
+  _Complex double * p_cplx_src;
+  _Complex double * p_cplx_prp;
+
 #ifdef _KOJAK_INST
 #pragma pomp inst init
 #pragma pomp inst begin(main)
@@ -281,16 +284,17 @@ int main(int argc, char *argv[])
 #endif
 
   for (j = 0; j < Nmeas; j++) {
-    sprintf(conf_filename, "%s.%.4d", gauge_input_filename, nstore);
-    if (g_cart_id == 0) {
-      printf("#\n# Trying to read gauge field from file %s in %s precision.\n",
-            conf_filename, (gauge_precision_read_flag == 32 ? "single" : "double"));
-      fflush(stdout);
-    }
-    if( (i = read_gauge_field(conf_filename,g_gauge_field)) !=0) {
-      fprintf(stderr, "Error %d while reading gauge field from %s\n Aborting...\n", i, conf_filename);
-      exit(-2);
-    }
+//    sprintf(conf_filename, "%s.%.4d", gauge_input_filename, nstore);
+//    if (g_cart_id == 0) {
+//      printf("#\n# Trying to read gauge field from file %s in %s precision.\n",
+//            conf_filename, (gauge_precision_read_flag == 32 ? "single" : "double"));
+//      fflush(stdout);
+//    }
+//    if( (i = read_gauge_field(conf_filename,g_gauge_field)) !=0) {
+//      fprintf(stderr, "Error %d while reading gauge field from %s\n Aborting...\n", i, conf_filename);
+//      exit(-2);
+//    }
+  unit_g_gauge_field();
 
 
     if (g_cart_id == 0) {
@@ -474,12 +478,75 @@ int main(int argc, char *argv[])
           /* 0-3 in case of 1 flavour  */
           /* 0-7 in case of 2 flavours */
           prepare_source(nstore, isample, ix, op_id, read_source_flag, source_location);
+          // prepare source manually: for site ix=0 set all is,ic to one
+          zero_spinor_field(operator_list[op_id].sr0, VOLUME / 2);
+          zero_spinor_field(operator_list[op_id].sr1, VOLUME / 2);
+          p_cplx_src = (_Complex double*) operator_list[op_id].sr0;
+          for( int is=0; is<4; is++ )
+            for( int ic=0; ic<3; ic++ ) {
+              p_cplx_src[is*3+ic] = 1.0;
+            }
           //randmize initial guess for eigcg if needed-----experimental
           if( (operator_list[op_id].solver == INCREIGCG) && (operator_list[op_id].solver_params.eigcg_rand_guess_opt) ){ //randomize the initial guess
               gaussian_volume_source( operator_list[op_id].prop0, operator_list[op_id].prop1,isample,ix,0); //need to check this
           } 
           operator_list[op_id].inverter(op_id, index_start, 1);
         }
+      }
+      
+      /* correlator */
+      double corrT[T];
+      double corrX[T];
+      double corrY[T];
+      double corrZ[T];
+      for( int t=0; t<T; t++ ) {
+        corrT[t] = 0.0;
+        corrX[t] = 0.0;
+        corrY[t] = 0.0;
+        corrZ[t] = 0.0;
+      }
+      
+      for(int t = 0; t < T; t++)
+        for(int x = 0; x < LX; x++)
+          for(int y = 0; y < LY; y++)
+            for(int z = 0; z < LZ; z++) {
+            int ip = g_lexic2eosub[ g_ipt[t][x][y][z] ];
+            if((t+x+y+z+g_proc_coords[3]*LZ+g_proc_coords[2]*LY
+            + g_proc_coords[0]*T+g_proc_coords[1]*LX)%2 == 0) {
+              p_cplx_prp = (_Complex double*) (operator_list[op_id].prop0+ip);
+            }
+            else {
+              p_cplx_prp = (_Complex double*) (operator_list[op_id].prop1+ip);
+            }
+            /* correlator */
+            for( int is=0; is<4; is++ )
+              for( int ic=0; ic<3; ic++ ) {
+                if( x==0 && y==0 && z==0 )
+                  corrT[t] += pow(creal(p_cplx_prp[is*3+ic]),2.0) + pow(cimag(p_cplx_prp[is*3+ic]),2.0);
+                if( t==0 && y==0 && z==0 )
+                  corrX[x] += pow(creal(p_cplx_prp[is*3+ic]),2.0) + pow(cimag(p_cplx_prp[is*3+ic]),2.0);
+                if( t==0 && x==0 && z==0 )
+                  corrY[y] += pow(creal(p_cplx_prp[is*3+ic]),2.0) + pow(cimag(p_cplx_prp[is*3+ic]),2.0);
+                if( t==0 && x==0 && y==0 )
+                  corrZ[z] += pow(creal(p_cplx_prp[is*3+ic]),2.0) + pow(cimag(p_cplx_prp[is*3+ic]),2.0);
+              }
+      }
+      /* print correlator */
+      printf("\n# correlator in T-dir.\n");
+      for(int t=0; t<T; t++) {
+        printf("%i\t%e\n", t, corrT[t]);
+      }
+      printf("\n# correlator in X-dir.\n");
+      for(int t=0; t<LX; t++) {
+        printf("%i\t%e\n", t, corrX[t]);
+      }
+      printf("\n# correlator in Y-dir.\n");
+      for(int t=0; t<LY; t++) {
+        printf("%i\t%e\n", t, corrY[t]);
+      }
+      printf("\n# correlator in Z-dir.\n");
+      for(int t=0; t<LZ; t++) {
+        printf("%i\t%e\n", t, corrZ[t]);
       }
 
 
