@@ -104,6 +104,12 @@ int invert_doublet_eo_quda(spinor * const Even_new_s, spinor * const Odd_new_s,
                            const SloppyPrecision sloppy_precision,
                            CompressionType compression);
 
+int cg_her_quda(spinor * const Odd_new, spinor * const Odd,
+                const int max_iter, const double precision,
+                const int rel_prec,
+                SloppyPrecision sloppy_precision,
+                CompressionType compression );
+
 // apply the TM operator using QUDA
 void M_full_quda(spinor * const Even_new, spinor * const Odd_new,  spinor * const Even, spinor * const Odd);
 void D_psi_quda(spinor * const P, spinor * const Q);

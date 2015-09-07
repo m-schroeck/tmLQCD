@@ -408,6 +408,51 @@ void reorder_spinor_toQuda( double* spinor, QudaPrecision precision, int doublet
     printf("# QUDA: time spent in reorder_spinor_toQuda: %f secs\n", diffTime);
 }
 
+void reorder_spinor_toQuda_odd( double* spinor, QudaPrecision precision, int doublet, double* spinor2 ) {
+  double startTime = gettime();
+
+  int Vh = VOLUME/2;
+
+  if( doublet ) {
+    memcpy( tempSpinor,       spinor, Vh*24*sizeof(double) );
+    memcpy( tempSpinor+Vh*24, spinor2, Vh*24*sizeof(double) );
+  }
+  else {
+    memcpy( tempSpinor, spinor, Vh*24*sizeof(double) );
+  }
+
+  // now copy and reorder from tempSpinor to spinor
+  for( int x0=0; x0<T; x0++ )
+    for( int x1=0; x1<LX; x1++ )
+      for( int x2=0; x2<LY; x2++ )
+        for( int x3=0; x3<LZ; x3++ ) {
+#if USE_LZ_LY_LX_T
+          int j = x3 + LZ*x2 + LY*LZ*x1 + LX*LY*LZ*x0;
+          int tm_idx = g_lexic2eosub[x1 + LX*x2 + LY*LX*x3 + LZ*LY*LX*x0];
+#else
+          int j = x1 + LX*x2 + LY*LX*x3 + LZ*LY*LX*x0;
+          int tm_idx = g_lexic2eosub[x3 + LZ*x2 + LY*LZ*x1 + LX*LY*LZ*x0];
+#endif
+          if((x0+x1+x2+x3+g_proc_coords[3]*LZ+g_proc_coords[2]*LY
+            + g_proc_coords[0]*T+g_proc_coords[1]*LX)%2 != 0) { //odd indices only
+
+            if( doublet ) {
+              memcpy( &(spinor[24*(j/2)]),          &(tempSpinor[24* tm_idx        ]), 24*sizeof(double));
+              memcpy( &(spinor[24*(j/2+VOLUME/2)]), &(tempSpinor[24*(tm_idx+VOLUME)]), 24*sizeof(double));
+            }
+            else {
+              memcpy( &(spinor[24*(j/2)]), &(tempSpinor[24*tm_idx]), 24*sizeof(double));
+            }
+          }
+
+        }
+
+  double endTime = gettime();
+  double diffTime = endTime - startTime;
+  if(g_proc_id == 0)
+    printf("# QUDA: time spent in reorder_spinor_toQuda_odd: %f secs\n", diffTime);
+}
+
 // reorder spinor from QUDA format
 void reorder_spinor_fromQuda( double* spinor, QudaPrecision precision, int doublet, double* spinor2 ) {
   double startTime = gettime();
@@ -446,6 +491,49 @@ void reorder_spinor_fromQuda( double* spinor, QudaPrecision precision, int doubl
   double diffTime = endTime - startTime;
   if(g_proc_id == 0)
     printf("# QUDA: time spent in reorder_spinor_fromQuda: %f secs\n", diffTime);
+}
+
+void reorder_spinor_fromQuda_odd( double* spinor, QudaPrecision precision, int doublet, double* spinor2 ) {
+  double startTime = gettime();
+
+  int Vh = VOLUME/2;
+
+  if( doublet ) {
+    memcpy( tempSpinor, spinor, 2*Vh*24*sizeof(double) );
+  }
+  else {
+    memcpy( tempSpinor, spinor, Vh*24*sizeof(double) );
+  }
+
+  // now copy and reorder from tempSpinor to spinor
+  for( int x0=0; x0<T; x0++ )
+    for( int x1=0; x1<LX; x1++ )
+      for( int x2=0; x2<LY; x2++ )
+        for( int x3=0; x3<LZ; x3++ ) {
+#if USE_LZ_LY_LX_T
+          int j = x3 + LZ*x2 + LY*LZ*x1 + LX*LY*LZ*x0;
+          int tm_idx = g_lexic2eosub[x1 + LX*x2 + LY*LX*x3 + LZ*LY*LX*x0];
+#else
+          int j = x1 + LX*x2 + LY*LX*x3 + LZ*LY*LX*x0;
+          int tm_idx = g_lexic2eosub[x3 + LZ*x2 + LY*LZ*x1 + LX*LY*LZ*x0];
+#endif
+          if((x0+x1+x2+x3+g_proc_coords[3]*LZ+g_proc_coords[2]*LY
+            + g_proc_coords[0]*T+g_proc_coords[1]*LX)%2 != 0) { //odd indices only
+
+            if( doublet ) {
+              memcpy( &(spinor [24* tm_idx]),  &(tempSpinor[24*(j/2)         ]), 24*sizeof(double));
+              memcpy( &(spinor2[24*(tm_idx)]), &(tempSpinor[24*(j/2+VOLUME/2)]), 24*sizeof(double));
+            }
+            else {
+              memcpy( &(spinor[24*tm_idx]), &(tempSpinor[24*(j/2)]), 24*sizeof(double));
+            }
+          }
+        }
+
+  double endTime = gettime();
+  double diffTime = endTime - startTime;
+  if(g_proc_id == 0)
+    printf("# QUDA: time spent in reorder_spinor_fromQuda_odd: %f secs\n", diffTime);
 }
 
 void set_boundary_conditions( CompressionType* compression ) {
@@ -768,6 +856,109 @@ int invert_doublet_eo_quda(spinor * const Even_new_s, spinor * const Odd_new_s,
   convert_lexic_to_eo(Even_new_c, Odd_new_c, solver_field[3]);
 
   finalize_solver(solver_field, nr_sf);
+  freeGaugeQuda();
+
+  if(iteration >= max_iter)
+    return(-1);
+
+  return(iteration);
+}
+
+int cg_her_quda(spinor * const Odd_new, spinor * const Odd,
+                const int max_iter, const double precision,
+                const int rel_prec,
+                SloppyPrecision sloppy_precision,
+                CompressionType compression ) {
+
+  void *spinorIn  = (void*)Odd; // source
+  void *spinorOut = (void*)Odd_new; // solution
+
+  if ( rel_prec )
+    inv_param.residual_type = QUDA_L2_RELATIVE_RESIDUAL;
+  else
+    inv_param.residual_type = QUDA_L2_ABSOLUTE_RESIDUAL;
+
+  inv_param.kappa = g_kappa;
+
+  // figure out which BC to use (theta, trivial...)
+  set_boundary_conditions(&compression);
+
+  // set the sloppy precision of the mixed prec solver
+  set_sloppy_prec(sloppy_precision);
+
+  // load gauge after setting precision
+   _loadGaugeQuda(compression);
+
+  // choose dslash type
+  if( g_mu != 0.0 && g_c_sw > 0.0 ) {
+    inv_param.dslash_type = QUDA_TWISTED_CLOVER_DSLASH;
+    inv_param.clover_order = QUDA_PACKED_CLOVER_ORDER;
+    inv_param.mu = fabs(g_mu/2./g_kappa);
+    inv_param.clover_coeff = g_c_sw*g_kappa;
+
+  }
+  else if( g_mu != 0.0 ) {
+    inv_param.dslash_type = QUDA_TWISTED_MASS_DSLASH;
+    inv_param.mu = fabs(g_mu/2./g_kappa);
+  }
+  else if( g_c_sw > 0.0 ) {
+    inv_param.dslash_type = QUDA_CLOVER_WILSON_DSLASH;
+    inv_param.clover_order = QUDA_PACKED_CLOVER_ORDER;
+    inv_param.clover_coeff = g_c_sw*g_kappa;
+  }
+  else {
+    inv_param.dslash_type = QUDA_WILSON_DSLASH;
+  }
+
+
+  /* Here we invert the hermitean operator squared */
+  if(g_proc_id == 0) {
+    printf("# QUDA: Using mixed precision CG!\n");
+    printf("# QUDA: mu = %f, kappa = %f\n", g_mu/2./g_kappa, g_kappa);
+    fflush(stdout);
+  }
+
+  // direct or norm-op. solve
+  inv_param.solution_type = QUDA_MATPCDAG_MATPC_SOLUTION;
+  inv_param.matpc_type = QUDA_MATPC_ODD_ODD;
+  inv_param.inv_type = QUDA_CG_INVERTER;
+  inv_param.solve_type = QUDA_NORMOP_PC_SOLVE;
+
+
+  inv_param.tol = sqrt(precision)*1.0;
+  inv_param.maxiter = max_iter;
+
+  // IMPORTANT: use opposite TM flavor since gamma5 -> -gamma5 (until LXLYLZT prob. resolved)
+  inv_param.twist_flavor = (g_mu < 0.0 ? QUDA_TWIST_PLUS : QUDA_TWIST_MINUS);
+  inv_param.Ls = 1;
+
+  // NULL pointers to host fields to force
+  // construction instead of download of the clover field:
+  if( g_c_sw > 0.0 )
+    loadCloverQuda(NULL, NULL, &inv_param);
+
+  // reorder spinor
+  reorder_spinor_toQuda_odd( (double*)spinorIn, inv_param.cpu_prec, 0, NULL );
+
+  // perform the inversion
+  invertQuda(spinorOut, spinorIn, &inv_param);
+
+  if( inv_param.verbosity == QUDA_VERBOSE )
+    if(g_proc_id == 0)
+      printf("# QUDA: Device memory used:  Spinor: %f GiB,  Gauge: %f GiB, Clover: %f GiB\n",
+   inv_param.spinorGiB, gauge_param.gaugeGiB, inv_param.cloverGiB);
+  if( inv_param.verbosity > QUDA_SILENT )
+    if(g_proc_id == 0)
+      printf("# QUDA: Done: %i iter / %g secs = %g Gflops\n",
+   inv_param.iter, inv_param.secs, inv_param.gflops/inv_param.secs);
+
+  // number of CG iterations
+  int iteration = inv_param.iter;
+
+  // reorder spinor
+  reorder_spinor_fromQuda_odd( (double*)spinorIn,  inv_param.cpu_prec, 0, NULL );
+  reorder_spinor_fromQuda_odd( (double*)spinorOut, inv_param.cpu_prec, 0, NULL );
+
   freeGaugeQuda();
 
   if(iteration >= max_iter)

@@ -85,6 +85,7 @@ int cg_her(spinor * const P, spinor * const Q, const int max_iter,
   diff(solver_field[1], Q, solver_field[0], N);
   assign(solver_field[2], solver_field[1], N);
   normsq=square_norm(solver_field[1], N, 1);
+  printf("CG: iterations: 0 res^2 %e\n", normsq);
 
   /* main loop */
   for(iteration = 1; iteration <= max_iter; iteration++) {

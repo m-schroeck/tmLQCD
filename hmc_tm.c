@@ -68,6 +68,9 @@
 #include "integrator.h"
 #include "sighandler.h"
 #include "meas/measurements.h"
+#ifdef QUDA
+#  include "quda_interface.h"
+#endif
 
 extern int nstore;
 
@@ -272,6 +275,9 @@ int main(int argc,char *argv[]) {
     exit(1);
   }
 
+#ifdef QUDA
+      _initQuda();
+#endif
 
 #ifdef _USE_HALFSPINOR
   j = init_dirac_halfspinor();
@@ -553,6 +559,9 @@ int main(int argc,char *argv[]) {
   }
   free(input_filename);
   free(filename);
+#ifdef QUDA
+  _endQuda();
+#endif
 #ifdef MPI
   MPI_Barrier(MPI_COMM_WORLD);
   MPI_Finalize();

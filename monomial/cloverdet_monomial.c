@@ -86,6 +86,10 @@ void cloverdet_derivative(const int id, hamiltonian_field_t * const hf) {
   // X_o -> w_fields[1]
   chrono_guess(mnl->w_fields[1], mnl->pf, mnl->csg_field, mnl->csg_index_array,
 	       mnl->csg_N, mnl->csg_n, VOLUME/2, mnl->Qsq);
+  mnl->iter1 += cg_her_quda(mnl->w_fields[1], mnl->pf, mnl->maxiter, mnl->forceprec,
+		       g_relative_precision_flag, SLOPPY_HALF, NO_COMPRESSION);
+  mnl->iter1 += cg_her_quda(mnl->w_fields[1], mnl->pf, mnl->maxiter, mnl->forceprec,
+		       g_relative_precision_flag, SLOPPY_HALF, NO_COMPRESSION);
   mnl->iter1 += cg_her(mnl->w_fields[1], mnl->pf, mnl->maxiter, mnl->forceprec, 
 		       g_relative_precision_flag, VOLUME/2, mnl->Qsq);
   chrono_add_solution(mnl->w_fields[1], mnl->csg_field, mnl->csg_index_array,

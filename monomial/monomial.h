@@ -25,6 +25,9 @@
 #include "su3spinor.h"
 #include "hamiltonian_field.h"
 #include "rational/rational.h"
+#ifdef QUDA
+#  include "quda_interface.h"
+#endif
 
 #define DET 0
 #define DETRATIO 1
